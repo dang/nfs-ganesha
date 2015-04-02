@@ -39,7 +39,6 @@
 
 #include "9p_types.h"
 #include "fsal_types.h"
-#include "cache_inode.h"
 #include "sal_data.h"
 
 #ifdef _USE_9P_RDMA

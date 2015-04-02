@@ -43,6 +43,7 @@
 #include "export_mgr.h"
 #include "fsal_convert.h"
 
+#ifdef _USE_NFS3
 /**
  *
  *  nfs3_FhandleToCache: gets the cache entry from the NFSv3 file handle.
@@ -109,6 +110,7 @@ cache_entry_t *nfs3_FhandleToCache(nfs_fh3 *fh3,
  badhdl:
 	return entry;
 }
+#endif /* _USE_NFS3 */
 
 /**
  * @brief Converts an FSAL object to an NFSv4 file handle
@@ -583,7 +585,7 @@ nfsstat4 nfs4_sanity_check_FH(compound_data_t *data,
 	if (fh_status != NFS4_OK)
 		return fh_status;
 
-	assert(data->current_entry != NULL &&
+	assert(data->current_obj != NULL &&
 	       data->current_filetype != NO_FILE_TYPE);
 
 	/* If the filehandle is invalid */

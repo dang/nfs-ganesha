@@ -137,7 +137,7 @@ int nlm4_Lock(nfs_arg_t *args, struct svc_req *req, nfs_res_t *res)
 
 	/* Check if v4 delegations conflict with v3 op */
 	PTHREAD_RWLOCK_rdlock(&entry->state_lock);
-	if (state_deleg_conflict(entry, lock.lock_type == FSAL_LOCK_W)) {
+	if (state_deleg_conflict(entry->obj_handle, lock.lock_type == FSAL_LOCK_W)) {
 		PTHREAD_RWLOCK_unlock(&entry->state_lock);
 		LogDebug(COMPONENT_NLM,
 			 "NLM lock request DROPPED due to delegation conflict");
@@ -152,7 +152,7 @@ int nlm4_Lock(nfs_arg_t *args, struct svc_req *req, nfs_res_t *res)
 	 * locks from a client that has rebooted from the SM_NOTIFY
 	 * that will release old locks
 	 */
-	state_status = state_lock(entry,
+	state_status = state_lock(entry->obj_handle,
 				  nlm_owner,
 				  nlm_state,
 				  arg->block ? STATE_NLM_BLOCKING :

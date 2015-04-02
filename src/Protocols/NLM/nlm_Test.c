@@ -115,7 +115,7 @@ int nlm4_Test(nfs_arg_t *args, struct svc_req *req, nfs_res_t *res)
 		return NFS_REQ_OK;
 	}
 
-	state_status = state_test(pentry,
+	state_status = state_test(pentry->obj_handle,
 				  state,
 				  nlm_owner,
 				  &lock,

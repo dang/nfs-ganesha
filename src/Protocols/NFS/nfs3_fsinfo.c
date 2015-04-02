@@ -38,7 +38,6 @@
 #include "log.h"
 #include "fsal.h"
 #include "nfs_core.h"
-#include "cache_inode.h"
 #include "nfs_exports.h"
 #include "export_mgr.h"
 #include "nfs_proto_functions.h"

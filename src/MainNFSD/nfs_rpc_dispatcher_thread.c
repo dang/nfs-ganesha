@@ -49,7 +49,6 @@
 #include "nfs_init.h"
 #include "nfs_core.h"
 #include "nfs_convert.h"
-#include "cache_inode.h"
 #include "nfs_exports.h"
 #include "nfs_proto_functions.h"
 #include "nfs_req_queue.h"
@@ -177,8 +176,10 @@ static void unregister_rpc(void)
 	} else {
 		unregister(nfs_param.core_param.program[P_NFS], NFS_V4, NFS_V4);
 	}
+#ifdef _USE_NLM
 	if (nfs_param.core_param.enable_NLM)
 		unregister(nfs_param.core_param.program[P_NLM], 1, NLM4_VERS);
+#endif /* _USE_NLM */
 	if (nfs_param.core_param.enable_RQUOTA) {
 		unregister(nfs_param.core_param.program[P_RQUOTA], RQUOTAVERS,
 			   EXT_RQUOTAVERS);
@@ -902,12 +903,16 @@ void nfs_Init_svc(void)
 #ifndef _NO_PORTMAPPER
 	/* Perform all the RPC registration, for UDP and TCP,
 	 * for NFS_V2, NFS_V3 and NFS_V4 */
+#ifdef _USE_NFS3
 	Register_program(P_NFS, CORE_OPTION_NFSV3, NFS_V3);
+#endif /* _USE_NFS3 */
 	Register_program(P_NFS, CORE_OPTION_NFSV4, NFS_V4);
 	Register_program(P_MNT, CORE_OPTION_NFSV3, MOUNT_V1);
 	Register_program(P_MNT, CORE_OPTION_NFSV3, MOUNT_V3);
+#ifdef _USE_NLM
 	if (nfs_param.core_param.enable_NLM)
 		Register_program(P_NLM, CORE_OPTION_NFSV3, NLM4_VERS);
+#endif /* _USE_NLM */
 	if (nfs_param.core_param.enable_RQUOTA &&
 	    (nfs_param.core_param.core_options & (CORE_OPTION_NFSV3 |
 						  CORE_OPTION_NFSV4))) {
@@ -1634,11 +1639,13 @@ static bool is_rpc_call_valid(nfs_request_t *reqnfs)
 
 	if (reqnfs->svc.rq_prog == nfs_param.core_param.program[P_NFS]) {
 		if (reqnfs->svc.rq_vers == NFS_V3) {
+#ifdef _USE_NFS3
 			if ((nfs_param.core_param.
 			     core_options & CORE_OPTION_NFSV3)
 			    && reqnfs->svc.rq_proc <= NFSPROC3_COMMIT)
 				return true;
 			else
+#endif /* _USE_NFS3 */
 				goto noproc_err;
 		} else if (reqnfs->svc.rq_vers == NFS_V4) {
 			if ((nfs_param.core_param.
@@ -1650,14 +1657,17 @@ static bool is_rpc_call_valid(nfs_request_t *reqnfs)
 		} else { /* version error, set the range and throw the error */
 			lo_vers = NFS_V4;
 			hi_vers = NFS_V3;
+#ifdef _USE_NFS3
 			if ((nfs_param.core_param.
 			     core_options & CORE_OPTION_NFSV3) != 0)
 				lo_vers = NFS_V3;
+#endif /* _USE_NFS3 */
 			if ((nfs_param.core_param.
 			     core_options & CORE_OPTION_NFSV4) != 0)
 				hi_vers = NFS_V4;
 			goto progvers_err;
 		}
+#ifdef _USE_NLM
 	} else if (reqnfs->svc.rq_prog == nfs_param.core_param.program[P_NLM]
 		   && ((nfs_param.core_param.core_options & CORE_OPTION_NFSV3)
 		       != 0)) {
@@ -1671,6 +1681,7 @@ static bool is_rpc_call_valid(nfs_request_t *reqnfs)
 			hi_vers = NLM4_VERS;
 			goto progvers_err;
 		}
+#endif /* _USE_NLM */
 	} else if (reqnfs->svc.rq_prog == nfs_param.core_param.program[P_MNT]
 		   && ((nfs_param.core_param.core_options & CORE_OPTION_NFSV3)
 		       != 0)) {

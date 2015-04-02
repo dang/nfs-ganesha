@@ -39,7 +39,6 @@
 #include "log.h"
 #include "fsal.h"
 #include "nfs_core.h"
-#include "cache_inode.h"
 #include "nfs_exports.h"
 #include "nfs_proto_functions.h"
 #include "nfs_convert.h"
@@ -218,7 +217,7 @@ int nfs3_write(nfs_arg_t *arg, struct svc_req *req, nfs_res_t *res)
 
 		res->res_write3.status = nfs3_Errno_state(
 				state_share_anonymous_io_start(
-					entry,
+					entry->obj_handle,
 					OPEN4_SHARE_ACCESS_WRITE,
 					SHARE_BYPASS_V3_WRITE));
 
@@ -232,7 +231,7 @@ int nfs3_write(nfs_arg_t *arg, struct svc_req *req, nfs_res_t *res)
 				     &written_size, data, &eof_met, &sync,
 				     NULL);
 
-		state_share_anonymous_io_done(entry, OPEN4_SHARE_ACCESS_WRITE);
+		state_share_anonymous_io_done(entry->obj_handle, OPEN4_SHARE_ACCESS_WRITE);
 
 		if (cache_status == CACHE_INODE_SUCCESS) {
 			/* Build Weak Cache Coherency data */

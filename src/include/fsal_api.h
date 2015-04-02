@@ -1110,11 +1110,30 @@ struct fsal_obj_ops {
  */
 
 /**
+ * @brief Get a reference to a handle
+ *
+ * If refcounting is done, get a reference.  Initial handle should have a
+ * reference already taken.
+ *
+ * @param[in] obj_hdl Handle to release
+ */
+	 void (*get_ref)(struct fsal_obj_handle *obj_hdl);
+
+/**
+ * @brief Put a reference to a handle
+ *
+ * If refcounting is done, put a reference.
+ *
+ * @param[in] obj_hdl Handle to release
+ */
+	 void (*put_ref)(struct fsal_obj_handle *obj_hdl);
+
+/**
  * @brief Clean up a filehandle
  *
  * This function cleans up private resources associated with a
  * filehandle and deallocates it.  Implement this method or you will
- * leak.
+ * leak.  Refcount (if used) should be 1
  *
  * @param[in] obj_hdl Handle to release
  */
@@ -1851,6 +1870,18 @@ struct fsal_obj_ops {
  */
 	void (*handle_to_key)(struct fsal_obj_handle *obj_hdl,
 			      struct gsh_buffdesc *fh_desc);
+/**
+ * @brief Compare two handles
+ *
+ * This function compares two handles to see if they reference the same file
+ *
+ * @param[in]     obj_hdl1    The first handle to compare
+ * @param[in]     obj_hdl2    The second handle to compare
+ *
+ * @return True if match, false otherwise
+ */
+	 bool (*handle_cmp)(struct fsal_obj_handle *obj_hdl1,
+			    struct fsal_obj_handle *obj_hdl2);
 /**@}*/
 
 /**@{*/
@@ -2342,6 +2373,7 @@ struct fsal_obj_handle {
 	struct attrlist *attrs;
 
 	object_file_type_t type;	/*< Object file type */
+	struct state_hdl *state;	/*< State related to this handle */
 };
 
 /**

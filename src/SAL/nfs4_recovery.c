@@ -1171,6 +1171,7 @@ bool nfs4_check_deleg_reclaim(nfs_client_id_t *clid, nfs_fh4 *fhandle)
 }
 
 
+#ifdef _USE_NLM
 /**
  * @brief Release NLM state
  */
@@ -1187,6 +1188,7 @@ static void nlm_releasecall(struct fridgethr_context *ctx)
 			err);
 	dec_nsm_client_ref(nsm_cp);
 }
+#endif /* _USE_NLM */
 
 void extractv4(char *ipv6, char *ipv4)
 {
@@ -1239,6 +1241,7 @@ bool ip_str_match(char *release_ip, char *server_ip)
  */
 static void nfs_release_nlm_state(char *release_ip)
 {
+#ifdef _USE_NLM
 	hash_table_t *ht = ht_nlm_client;
 	state_nlm_client_t *nlm_cp;
 	state_nsm_client_t *nsm_cp;
@@ -1281,6 +1284,7 @@ static void nfs_release_nlm_state(char *release_ip)
 		}
 		PTHREAD_RWLOCK_unlock(&ht->partitions[i].lock);
 	}
+#endif /* _USE_NLM */
 }
 
 static int ip_match(char *ip, nfs_client_id_t *cid)

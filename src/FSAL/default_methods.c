@@ -548,6 +548,24 @@ static bool handle_is(struct fsal_obj_handle *obj_hdl, object_file_type_t type)
 	return obj_hdl->type == type;
 }
 
+/* get_ref
+ * default case is no refcounting
+ */
+
+static void handle_get_ref(struct fsal_obj_handle *obj_hdl)
+{
+	/* return */
+}
+
+/* put_ref
+ * default case is no refcounting
+ */
+
+static void handle_put_ref(struct fsal_obj_handle *obj_hdl)
+{
+	/* return */
+}
+
 /* handle_release
  * default case is to throw a fault error.
  * creating an handle is not supported so getting here is bad
@@ -969,7 +987,29 @@ static fsal_status_t handle_digest(const struct fsal_obj_handle *obj_hdl,
 }
 
 /**
- * handle_digest
+ * handle_cmp
+ * default case compare with handle_to_key
+ */
+static bool handle_cmp(struct fsal_obj_handle *obj_hdl1,
+		       struct fsal_obj_handle *obj_hdl2)
+{
+	struct gsh_buffdesc key1, key2;
+
+	if (obj_hdl1 == NULL || obj_hdl2 == NULL)
+		return false;
+
+	if (obj_hdl1 == obj_hdl2)
+		return true;
+
+	obj_hdl1->obj_ops.handle_to_key(obj_hdl1, &key1);
+	obj_hdl2->obj_ops.handle_to_key(obj_hdl2, &key2);
+	if (key1.len != key2.len)
+		return false;
+	return !memcmp(key1.addr, key2.addr, key1.len);
+}
+
+/**
+ * handle_to_key
  * default case return a safe empty key
  */
 
@@ -1049,6 +1089,8 @@ static nfsstat4 layoutcommit(struct fsal_obj_handle *obj_hdl,
  */
 
 struct fsal_obj_ops def_handle_ops = {
+	.get_ref = handle_get_ref,
+	.put_ref = handle_put_ref,
 	.release = handle_release,
 	.lookup = lookup,
 	.readdir = read_dirents,
@@ -1089,6 +1131,7 @@ struct fsal_obj_ops def_handle_ops = {
 	.handle_is = handle_is,
 	.lru_cleanup = lru_cleanup,
 	.handle_digest = handle_digest,
+	.handle_cmp = handle_cmp,
 	.handle_to_key = handle_to_key,
 	.layoutget = layoutget,
 	.layoutreturn = layoutreturn,

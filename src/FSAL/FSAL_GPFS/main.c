@@ -38,6 +38,7 @@
 #include "fsal.h"
 #include "fsal_internal.h"
 #include "FSAL/fsal_init.h"
+#include "gsh_config.h"
 
 /* GPFS FSAL module private storage
  */

@@ -41,7 +41,6 @@
 #include <netdb.h>
 #include "nfs_core.h"
 #include "log.h"
-#include "cache_inode.h"
 #include "export_mgr.h"
 #include "sal_functions.h"
 #include "fsal.h"
@@ -160,8 +159,8 @@ int _9p_lock(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 			break;
 		}
 
-		state_status = state_lock(pfid->pentry,
-					  powner, &pfid->state,
+		state_status = state_lock(pfid->pentry->obj_handle,
+					  powner, &state,
 					  STATE_NON_BLOCKING, NULL, &lock,
 					  &holder, &conflict);
 
@@ -175,7 +174,7 @@ int _9p_lock(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 		break;
 
 	case _9P_LOCK_TYPE_UNLCK:
-		if (state_unlock(pfid->pentry, &pfid->state,
+		if (state_unlock(pfid->pentry->obj_handle, &pfid->state,
 				 powner, false, 0, &lock)
 			    != STATE_SUCCESS)
 			status = _9P_LOCK_ERROR;

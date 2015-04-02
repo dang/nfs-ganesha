@@ -41,7 +41,6 @@
 #include "nfs4.h"
 #include "mount.h"
 #include "nfs_core.h"
-#include "cache_inode.h"
 #include "nfs_exports.h"
 #include "nfs_creds.h"
 #include "nfs_proto_functions.h"
@@ -94,7 +93,7 @@ int nfs3_access(nfs_arg_t *arg, struct svc_req *req, nfs_res_t *res)
 
 	/* Perform the 'access' call */
 	cache_status =
-	    nfs_access_op(entry, arg->arg_access3.access,
+	    nfs_access_op(entry->obj_handle, arg->arg_access3.access,
 			  &res->res_access3.ACCESS3res_u.resok.access, NULL);
 
 	if (cache_status == CACHE_INODE_SUCCESS

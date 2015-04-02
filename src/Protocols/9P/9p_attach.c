@@ -40,8 +40,6 @@
 #include "nfs_core.h"
 #include "export_mgr.h"
 #include "log.h"
-#include "cache_inode.h"
-#include "cache_inode_lru.h"
 #include "fsal.h"
 #include "nfs_exports.h"
 #include "9p.h"
@@ -167,11 +165,11 @@ int _9p_attach(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 		/* Check if root cache entry is correctly set, fetch it, and
 		 * take an LRU reference.
 		 */
-		cache_status = nfs_export_get_root_entry(export, &pfid->pentry);
-		if (cache_status != CACHE_INODE_SUCCESS) {
-			err = _9p_tools_errno(cache_status);
+		/*cache_status = nfs_export_get_root_entry(export, &pfid->pentry);*/
+		/*if (cache_status != CACHE_INODE_SUCCESS) {*/
+			/*err = _9p_tools_errno(cache_status);*/
 			goto errout;
-		}
+		/*}*/
 	} else {
 		fsal_status = op_ctx->fsal_export->exp_ops.lookup_path(
 						op_ctx->fsal_export,

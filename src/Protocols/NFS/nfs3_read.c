@@ -37,7 +37,6 @@
 #include "log.h"
 #include "fsal.h"
 #include "nfs_core.h"
-#include "cache_inode.h"
 #include "nfs_exports.h"
 #include "nfs_proto_functions.h"
 #include "nfs_proto_tools.h"
@@ -210,7 +209,7 @@ int nfs3_read(nfs_arg_t *arg, struct svc_req *req, nfs_res_t *res)
 
 		res->res_read3.status = nfs3_Errno_state(
 				state_share_anonymous_io_start(
-					entry,
+					entry->obj_handle,
 					OPEN4_SHARE_ACCESS_READ,
 					SHARE_BYPASS_READ));
 
@@ -230,7 +229,7 @@ int nfs3_read(nfs_arg_t *arg, struct svc_req *req, nfs_res_t *res)
 						&sync,
 						NULL);
 
-		state_share_anonymous_io_done(entry, OPEN4_SHARE_ACCESS_READ);
+		state_share_anonymous_io_done(entry->obj_handle, OPEN4_SHARE_ACCESS_READ);
 
 		if (cache_status == CACHE_INODE_SUCCESS) {
 			nfs_read_ok(req, res, data, read_size,

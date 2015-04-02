@@ -38,8 +38,6 @@
 #include "log.h"
 #include "fsal.h"
 #include "nfs_core.h"
-#include "cache_inode.h"
-#include "cache_inode_lru.h"
 #include "nfs_exports.h"
 #include "export_mgr.h"
 #include "nfs_proto_functions.h"
@@ -52,6 +50,7 @@ cache_inode_status_t nfs3_readdirplus_callback(void *opaque,
 					       cache_entry_t *entry,
 					       const struct attrlist *attr,
 					       uint64_t mounted_on_fileid,
+					       uint64_t cookie,
 					       enum cb_state cb_state);
 
 static void free_entryplus3s(entryplus3 *entryplus3s);
@@ -92,6 +91,7 @@ nfsstat3 nfs_readdir_dot_entry(cache_entry_t *entry, const char *name,
 			  entry,
 			  entry->obj_handle->attrs,
 			  0,
+			  cookie,
 			  CB_ORIGINAL);
 
 	if (cache_status != CACHE_INODE_SUCCESS)
@@ -403,6 +403,7 @@ cache_inode_status_t nfs3_readdirplus_callback(void *opaque,
 					       cache_entry_t *entry,
 					       const struct attrlist *attr,
 					       uint64_t mounted_on_fileid,
+					       uint64_t cookie,
 					       enum cb_state cb_state)
 {
 	/* Not-so-opaque pointer to callback data` */
