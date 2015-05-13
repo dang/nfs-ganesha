@@ -1425,6 +1425,7 @@ static fsal_status_t setattrs(struct fsal_obj_handle *obj_hdl,
 		/* The POSIX chmod call doesn't affect the symlink object, but
 		 * the entry it points to. So we must ignore it.
 		 */
+		LogDebug(COMPONENT_FSAL, "Setting mode to %#o", attrs->mode);
 		if (!S_ISLNK(stat.st_mode)) {
 			if (vfs_unopenable_type(obj_hdl->type))
 				retval = fchmodat(cfd.fd,

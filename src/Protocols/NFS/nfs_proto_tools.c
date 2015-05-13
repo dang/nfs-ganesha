@@ -3834,7 +3834,7 @@ bool nfs4_Fattr_Supported_Bitmap(struct bitmap4 *bitmap)
 
 	for (attribute = next_attr_from_bitmap(bitmap, -1); attribute != -1;
 	     attribute = next_attr_from_bitmap(bitmap, attribute)) {
-		LogFullDebug(COMPONENT_NFS_V4,
+		LogDebug(COMPONENT_NFS_V4,
 			     "nfs4_Fattr_Supported  ==============> %s supported flag=%u | ",
 			     fattr4tab[attribute].name,
 			     fattr4tab[attribute].supported);
@@ -4075,17 +4075,17 @@ static int Fattr4_To_FSAL_attr(struct attrlist *attrs, fattr4 *Fattr,
 		if (xdr_res == FATTR_XDR_SUCCESS) {
 			if (attrs)
 				FSAL_SET_MASK(attrs->mask, f4e->attrmask);
-			LogFullDebug(COMPONENT_NFS_V4,
+			LogDebug(COMPONENT_NFS_V4,
 				     "Decode attr %d, name = %s",
 				     attribute_to_set, f4e->name);
 		} else if (xdr_res == FATTR_XDR_SUCCESS_EXP) {
 			if (attrs)
 				FSAL_SET_MASK(attrs->mask, f4e->exp_attrmask);
-			LogFullDebug(COMPONENT_NFS_V4,
+			LogDebug(COMPONENT_NFS_V4,
 				     "Decode (exp) attr %d, name = %s",
 				     attribute_to_set, f4e->name);
 		} else if (xdr_res == FATTR_XDR_NOOP) {
-			LogFullDebug(COMPONENT_NFS_V4,
+			LogDebug(COMPONENT_NFS_V4,
 				     "Attr not supported %d name=%s",
 				     attribute_to_set, f4e->name);
 			if (nfs_status == NFS4_OK) {
@@ -4094,7 +4094,7 @@ static int Fattr4_To_FSAL_attr(struct attrlist *attrs, fattr4 *Fattr,
 			}
 			goto decodeerr;
 		} else {
-			LogFullDebug(COMPONENT_NFS_V4,
+			LogDebug(COMPONENT_NFS_V4,
 				     "Decode attr FAILED: %d, name = %s",
 				     attribute_to_set, f4e->name);
 			if (args.nfs_status == NFS4_OK)

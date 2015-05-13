@@ -68,6 +68,7 @@ cache_inode_setattr(cache_entry_t *entry,
 	uint64_t before;
 	const struct user_cred *creds = op_ctx->creds;
 
+	LogDebug(COMPONENT_CACHE_INODE, "Enter");
 	/* True if we have taken the content lock on 'entry' */
 	bool content_locked = false;
 

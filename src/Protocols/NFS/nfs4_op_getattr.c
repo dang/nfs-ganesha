@@ -88,6 +88,8 @@ int nfs4_op_getattr(struct nfs_argop4 *op, compound_data_t *data,
 
 	nfs4_bitmap4_Remove_Unsupported(&arg_GETATTR4->attr_request);
 
+	nfs4_Fattr_Supported_Bitmap(&arg_GETATTR4->attr_request);
+
 	res_GETATTR4->status =
 		   cache_entry_To_Fattr(data->current_entry,
 					&res_GETATTR4->GETATTR4res_u.resok4.

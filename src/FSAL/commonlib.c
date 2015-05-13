@@ -1550,6 +1550,8 @@ static fsal_errors_t dup_ace(fsal_ace_t *sace, fsal_ace_t *dace)
 	return ERR_FSAL_NO_ERROR;
 }
 
+void print_acl(fsal_acl_t *acl, const char *func);
+void print_ace(fsal_ace_t *ace, const char *func);
 fsal_errors_t fsal_inherit_acls(struct attrlist *attrs, fsal_acl_t *sacl,
 				fsal_aceflag_t inherit)
 {
@@ -1573,6 +1575,8 @@ fsal_errors_t fsal_inherit_acls(struct attrlist *attrs, fsal_acl_t *sacl,
 	if (naces == 0)
 		return ERR_FSAL_NO_ERROR;
 
+	LogDebug(COMPONENT_FSAL, "Inheriting %d ACEs", naces);
+
 	attrs->acl = nfs4_acl_alloc();
 	if (!attrs->acl)
 		return ERR_FSAL_NOMEM;
@@ -1587,6 +1591,7 @@ fsal_errors_t fsal_inherit_acls(struct attrlist *attrs, fsal_acl_t *sacl,
 	for (sace = sacl->aces; sace < sacl->aces + sacl->naces; sace++) {
 		if (IS_FSAL_ACE_FLAG(*sace, inherit)) {
 			*dace = *sace;
+			print_ace(dace, "before");
 			if (IS_FSAL_ACE_NO_PROPAGATE(*dace))
 				GET_FSAL_ACE_FLAG(*dace) &=
 					~(FSAL_ACE_FLAG_INHERIT |
@@ -1598,13 +1603,17 @@ fsal_errors_t fsal_inherit_acls(struct attrlist *attrs, fsal_acl_t *sacl,
 					FSAL_ACE_FLAG_NO_PROPAGATE;
 			else if (is_dup_ace(dace, inherit)) {
 				dup_ace(dace, dace + 1);
+				print_ace(dace, "dup'd");
 				dace++;
 			}
+			print_ace(dace, "after");
 			dace++;
 		}
 	}
 	attrs->acl->naces = naces;
 	FSAL_SET_MASK(attrs->mask, ATTR_ACL);
+
+	print_acl(attrs->acl, __func__);
 
 	return ERR_FSAL_NO_ERROR;
 }

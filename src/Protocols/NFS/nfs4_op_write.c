@@ -172,6 +172,7 @@ static int nfs4_write(struct nfs_argop4 *op, compound_data_t *data,
 	resp->resop = NFS4_OP_WRITE;
 	res_WRITE4->status = NFS4_OK;
 
+	LogDebug(COMPONENT_STATE, "%s: Begin", __func__);
 	if ((data->minorversion > 0)
 	     && (nfs4_Is_Fh_DSHandle(&data->currentFH))) {
 		if (io == CACHE_INODE_WRITE)
@@ -207,6 +208,7 @@ static int nfs4_write(struct nfs_argop4 *op, compound_data_t *data,
 	/* Check stateid correctness and get pointer to state
 	 * (also checks for special stateids)
 	 */
+	LogDebug(COMPONENT_STATE, "%s: before nfs4_Check_Stateid", __func__);
 	res_WRITE4->status = nfs4_Check_Stateid(&arg_WRITE4->stateid,
 						entry,
 						&state_found,
@@ -215,6 +217,7 @@ static int nfs4_write(struct nfs_argop4 *op, compound_data_t *data,
 						0,
 						false,
 						"WRITE");
+	LogDebug(COMPONENT_STATE, "%s: after nfs4_Check_Stateid", __func__);
 
 	if (res_WRITE4->status != NFS4_OK)
 		return res_WRITE4->status;
@@ -229,6 +232,7 @@ static int nfs4_write(struct nfs_argop4 *op, compound_data_t *data,
 			info->io_advise = state_found->state_data.io_advise;
 		switch (state_found->state_type) {
 		case STATE_TYPE_SHARE:
+			LogDebug(COMPONENT_STATE, "%s: STATE_TYPE_SHARE", __func__);
 			state_open = state_found;
 			/* Note this causes an extra refcount, but it
 			 * simplifies logic below.
@@ -238,6 +242,7 @@ static int nfs4_write(struct nfs_argop4 *op, compound_data_t *data,
 			break;
 
 		case STATE_TYPE_LOCK:
+			LogDebug(COMPONENT_STATE, "%s: STATE_TYPE_LOCK", __func__);
 			state_open = state_found->state_data.lock.openstate;
 			inc_state_t_ref(state_open);
 			/**
@@ -247,6 +252,7 @@ static int nfs4_write(struct nfs_argop4 *op, compound_data_t *data,
 			break;
 
 		case STATE_TYPE_DELEG:
+			LogDebug(COMPONENT_STATE, "%s: STATE_TYPE_DELEG", __func__);
 			/* Check if the delegation state allows READ */
 			sdeleg = &state_found->state_data.deleg;
 			if (!(sdeleg->sd_type & OPEN_DELEGATE_WRITE) ||
@@ -264,6 +270,7 @@ static int nfs4_write(struct nfs_argop4 *op, compound_data_t *data,
 			break;
 
 		case STATE_TYPE_LAYOUT:
+			LogDebug(COMPONENT_STATE, "%s: STATE_TYPE_LAYOUT", __func__);
 			state_open = NULL;
 			break;
 
@@ -299,6 +306,7 @@ static int nfs4_write(struct nfs_argop4 *op, compound_data_t *data,
 		 * share conflicts
 		 */
 		state_open = NULL;
+		LogDebug(COMPONENT_STATE, "%s: Anonymous", __func__);
 
 		/* Special stateid, no open state, check to see if any share
 		 * conflicts The stateid is all-0 or all-1
@@ -381,6 +389,7 @@ static int nfs4_write(struct nfs_argop4 *op, compound_data_t *data,
 
 	/* if size == 0 , no I/O) are actually made and everything is alright */
 	if (size == 0) {
+		LogDebug(COMPONENT_STATE, "%s: Size 0", __func__);
 		res_WRITE4->WRITE4res_u.resok4.count = 0;
 		res_WRITE4->WRITE4res_u.resok4.committed = FILE_SYNC4;
 
@@ -398,13 +407,16 @@ static int nfs4_write(struct nfs_argop4 *op, compound_data_t *data,
 		sync = true;
 
 	if (!anonymous_started && data->minorversion == 0) {
+		LogDebug(COMPONENT_STATE, "%s: Before get_state_owner_ref", __func__);
 		owner = get_state_owner_ref(state_found);
+		LogDebug(COMPONENT_STATE, "%s: After get_state_owner_ref", __func__);
 		if (owner != NULL) {
 			op_ctx->clientid =
 				&owner->so_owner.so_nfs4_owner.so_clientid;
 		}
 	}
 
+	LogDebug(COMPONENT_STATE, "%s: Before cache_inode_rdwr_plus", __func__);
 	cache_status = cache_inode_rdwr_plus(entry,
 					io,
 					offset,
@@ -414,6 +426,7 @@ static int nfs4_write(struct nfs_argop4 *op, compound_data_t *data,
 					&eof_met,
 					&sync,
 					info);
+	LogDebug(COMPONENT_STATE, "%s: After cache_inode_rdwr_plus", __func__);
 
 	if (cache_status != CACHE_INODE_SUCCESS) {
 		LogDebug(COMPONENT_NFS_V4,

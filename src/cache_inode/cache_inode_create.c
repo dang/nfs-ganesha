@@ -85,6 +85,7 @@ cache_inode_create(cache_entry_t *parent,
 
 	if (create_arg == NULL)
 		create_arg = &zero_create_arg;
+	LogDebug(COMPONENT_CACHE_INODE, "Creating %s", name);
 
 	if ((type != REGULAR_FILE) && (type != DIRECTORY)
 	    && (type != SYMBOLIC_LINK) && (type != SOCKET_FILE)

@@ -379,10 +379,10 @@ static fsal_status_t fsal_check_access_acl(struct user_cred *creds,
 		}
 	}
 
-	LogFullDebug(COMPONENT_NFS_V4_ACL,
+	LogDebug(COMPONENT_NFS_V4_ACL,
 		     "file acl=%p, file uid=%u, file gid=%u, ", pacl, uid, gid);
 
-	if (isFullDebug(COMPONENT_NFS_V4_ACL)) {
+	if (isDebug(COMPONENT_NFS_V4_ACL)) {
 		char str[LOG_BUFF_LEN];
 		struct display_buffer dspbuf = { sizeof(str), str, str };
 
@@ -390,7 +390,7 @@ static fsal_status_t fsal_check_access_acl(struct user_cred *creds,
 					  p_object_attributes->type ==
 					  DIRECTORY);
 
-		LogFullDebug(COMPONENT_NFS_V4_ACL,
+		LogDebug(COMPONENT_NFS_V4_ACL,
 			     "user uid=%u, user gid= %u, v4mask=%s",
 			     creds->caller_uid, creds->caller_gid, str);
 	}
@@ -413,7 +413,7 @@ static fsal_status_t fsal_check_access_acl(struct user_cred *creds,
 		missing_access &=
 		    ~(FSAL_ACE_PERM_WRITE_ATTR | FSAL_ACE_PERM_READ_ATTR);
 		if (!missing_access) {
-			LogFullDebug(COMPONENT_NFS_V4_ACL,
+			LogDebug(COMPONENT_NFS_V4_ACL,
 				     "Met owner privileges");
 			return fsalstat(ERR_FSAL_NO_ERROR, 0);
 		}
@@ -423,18 +423,20 @@ static fsal_status_t fsal_check_access_acl(struct user_cred *creds,
 	for (pace = pacl->aces; pace < pacl->aces + pacl->naces; pace++) {
 		ace_number += 1;
 
-		LogFullDebug(COMPONENT_NFS_V4_ACL,
+		LogDebug(COMPONENT_NFS_V4_ACL,
 			     "ace numnber: %d ace type 0x%X perm 0x%X flag 0x%X who %u",
 			     ace_number, pace->type, pace->perm, pace->flag,
 			     GET_FSAL_ACE_WHO(*pace));
 
 		/* Process Allow and Deny entries. */
-		if (!IS_FSAL_ACE_ALLOW(*pace) && !IS_FSAL_ACE_DENY(*pace)) {
-			LogFullDebug(COMPONENT_NFS_V4_ACL, "not allow or deny");
+		if (IS_FSAL_ACE_ALLOW(*pace))
+			LogDebug(COMPONENT_NFS_V4_ACL, "allow");
+		else if (IS_FSAL_ACE_DENY(*pace))
+			LogDebug(COMPONENT_NFS_V4_ACL, "deny");
+		else {
+			LogDebug(COMPONENT_NFS_V4_ACL, "not allow or deny");
 			continue;
 		}
-
-		LogFullDebug(COMPONENT_NFS_V4_ACL, "allow or deny");
 
 		/* Check if this ACE is applicable. */
 		if (fsal_check_ace_applicable(pace, creds, is_dir, is_owner,
@@ -446,7 +448,7 @@ static fsal_status_t fsal_check_access_acl(struct user_cred *creds,
 				else
 					tperm = pace->perm;
 
-				LogFullDebug(COMPONENT_NFS_V4_ACL,
+				LogDebug(COMPONENT_NFS_V4_ACL,
 					     "allow perm 0x%X remainingPerms 0x%X",
 					     tperm, missing_access);
 
@@ -509,7 +511,7 @@ static fsal_status_t fsal_check_access_acl(struct user_cred *creds,
 		LogDebug(COMPONENT_NFS_V4_ACL, "final access denied (EACCESS)");
 		return fsalstat(ERR_FSAL_ACCESS, 0);
 	} else {
-		LogFullDebug(COMPONENT_NFS_V4_ACL, "access granted");
+		LogDebug(COMPONENT_NFS_V4_ACL, "access granted");
 		return fsalstat(ERR_FSAL_NO_ERROR, 0);
 	}
 }
@@ -554,7 +556,7 @@ fsal_check_access_no_acl(struct user_cred *creds,
 	gid = p_object_attributes->group;
 	mode = p_object_attributes->mode;
 
-	LogFullDebug(COMPONENT_NFS_V4_ACL,
+	LogDebug(COMPONENT_NFS_V4_ACL,
 		     "file Mode=%#o, file uid=%u, file gid= %u, user uid=%u, user gid= %u, access_type=0X%x",
 		     mode, uid, gid,
 		     creds->caller_uid, creds->caller_gid,
@@ -624,7 +626,7 @@ fsal_check_access_no_acl(struct user_cred *creds,
 	    ((mode & S_IROTH) ? FSAL_R_OK : 0) | ((mode & S_IWOTH) ? FSAL_W_OK :
 						  0) | ((mode & S_IXOTH) ?
 							FSAL_X_OK : 0);
-	LogFullDebug(COMPONENT_NFS_V4_ACL,
+	LogDebug(COMPONENT_NFS_V4_ACL,
 		     "Mask=0X%x, Access Type=0X%x Allowed=0X%x Denied=0X%x %s",
 		     mask, access_type,
 		     mask & access_type,

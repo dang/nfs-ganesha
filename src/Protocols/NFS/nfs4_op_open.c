@@ -1343,6 +1343,7 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
 	case CLAIM_NULL:
 		{
 			cache_entry_t *entry = NULL;
+			LogDebug(COMPONENT_NFS_V4, "CLAIM_NULL");
 
 			res_OPEN4->status = open4_claim_null(arg_OPEN4,
 							     data,
@@ -1362,6 +1363,7 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
 
 		/* Both of these just use the current filehandle. */
 	case CLAIM_PREVIOUS:
+		LogDebug(COMPONENT_NFS_V4, "CLAIM_PREVIOUS");
 		owner->so_owner.so_nfs4_owner.so_confirmed = true;
 		if (!nfs4_check_deleg_reclaim(clientid, &data->currentFH)) {
 			/* It must have been revoked. Can't reclaim.*/
@@ -1372,9 +1374,11 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
 		break;
 
 	case CLAIM_FH:
+		LogDebug(COMPONENT_NFS_V4, "CLAIM_FH");
 		break;
 
 	case CLAIM_DELEGATE_PREV:
+		LogDebug(COMPONENT_NFS_V4, "CLAIM_DELEGATE_PREV");
 		/* FIXME: Remove this when we have full support
 		 * for CLAIM_DELEGATE_PREV and delegpurge operations
 		 */
@@ -1382,6 +1386,7 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
 		break;
 
 	case CLAIM_DELEGATE_CUR:
+		LogDebug(COMPONENT_NFS_V4, "CLAIM_DELEGATE_CUR");
 		res_OPEN4->status = open4_claim_deleg(arg_OPEN4, data,
 						      clientid);
 		break;
@@ -1393,7 +1398,8 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
 	}
 
 	if (res_OPEN4->status != NFS4_OK) {
-		LogDebug(COMPONENT_NFS_V4, "general failure");
+		LogDebug(COMPONENT_NFS_V4, "general failure: %s",
+			 nfsstat4_to_str(res_OPEN4->status));
 		goto out;
 	}
 
