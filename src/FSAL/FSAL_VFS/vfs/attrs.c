@@ -42,6 +42,8 @@ struct vfs_acl_entry {
 
 static struct avltree vfs_acl_tree = {0};
 
+void print_acl(fsal_acl_t *acl, const char *func);
+
 /**
  * @brief VFS acl comparator for AVL tree walk
  *
@@ -82,9 +84,11 @@ static struct vfs_acl_entry *vfs_acl_locate(struct fsal_obj_handle *obj)
 
 	fa_entry = vfs_acl_lookup(&key);
 	if (fa_entry) {
+		LogDebug(COMPONENT_FSAL, "found");
 		return fa_entry;
 	}
 
+	LogDebug(COMPONENT_FSAL, "create");
 	fa_entry = gsh_calloc(sizeof(struct vfs_acl_entry), 1);
 	if (!fa_entry)
 		return NULL;
@@ -131,6 +135,7 @@ fsal_status_t vfs_sub_getattrs(struct vfs_fsal_obj_handle *vfs_hdl,
 	fsal_acl_data_t acldata;
 	fsal_acl_t *acl;
 
+	LogDebug(COMPONENT_FSAL, "Enter");
 	fa = vfs_acl_locate(&vfs_hdl->obj_handle);
 	if (!fa->fa_acl.naces) {
 		/* No ACLs yet */
@@ -140,6 +145,7 @@ fsal_status_t vfs_sub_getattrs(struct vfs_fsal_obj_handle *vfs_hdl,
 		return fsalstat(ERR_FSAL_NO_ERROR, 0);
 	}
 
+	print_acl((fsal_acl_t*)&fa->fa_acl, "found");
 	acldata.naces = fa->fa_acl.naces;
 	acldata.aces = (fsal_ace_t *) nfs4_ace_alloc(acldata.naces);
 	memcpy(acldata.aces, fa->fa_acl.aces,
@@ -149,6 +155,7 @@ fsal_status_t vfs_sub_getattrs(struct vfs_fsal_obj_handle *vfs_hdl,
 	if (!acl) {
 		return fsalstat(ERR_FSAL_FAULT, status);
 	}
+	print_acl(acl, "Returned");
 	vfs_hdl->obj_handle.attributes.acl = acl;
 	FSAL_SET_MASK(attrib->mask, ATTR_ACL);
 
@@ -164,12 +171,15 @@ fsal_status_t vfs_sub_setattrs(struct vfs_fsal_obj_handle *vfs_hdl,
 	if (!FSAL_TEST_MASK(request_mask, ATTR_ACL) || !attrib || !attrib->acl)
 		return fsalstat(ERR_FSAL_NO_ERROR, 0);
 
+	LogDebug(COMPONENT_FSAL, "Enter");
+	print_acl(attrib->acl, "Given");
 	fa = vfs_acl_locate(&vfs_hdl->obj_handle);
 	nfs4_ace_free(fa->fa_acl.aces);
 	fa->fa_acl.naces = attrib->acl->naces;
 	fa->fa_acl.aces = (fsal_ace_t *) nfs4_ace_alloc(fa->fa_acl.naces);
 	memcpy(fa->fa_acl.aces, attrib->acl->aces,
 	       fa->fa_acl.naces * sizeof(fsal_ace_t));
+	print_acl((fsal_acl_t*)&fa->fa_acl, "Set");
 
 	FSAL_SET_MASK(attrib->mask, ATTR_ACL);
 

@@ -34,6 +34,8 @@
 #include "attrs.h"
 #include "panfs_um_pnfs.h"
 
+void print_ace(fsal_ace_t *ace, const char *func);
+
 pan_fs_ace_info_t fsal_to_panace_info(fsal_acetype_t type, fsal_aceflag_t flag)
 {
 	pan_fs_ace_info_t info;
@@ -285,9 +287,11 @@ static fsal_status_t fsal_acl_2_panfs_acl(struct attrlist *attrib,
 
 	/* Create Panfs acl data. */
 	panacl->naces = attrib->acl->naces;
+	LogDebug(COMPONENT_FSAL, "Converting %u aces:", panacl->naces);
 
 	for (ace = attrib->acl->aces, panace = panacl->aces;
 	     ace < attrib->acl->aces + attrib->acl->naces; ace++, panace++) {
+		print_ace(ace, __func__);
 		panace->info = fsal_to_panace_info(ace->type, ace->flag);
 		if (panace->info == (uint32_t)-1) {
 			ret = ERR_FSAL_INVAL;
@@ -345,6 +349,7 @@ static fsal_status_t panfs_acl_2_fsal_acl(struct pan_fs_acl_s *panacl,
 	if (!acldata.aces)
 		return fsalstat(ERR_FSAL_NOMEM, ENOMEM);
 
+	LogDebug(COMPONENT_FSAL, "Converting %u aces:", acldata.naces);
 	ace = acldata.aces;
 	for (panace = panacl->aces; panace < panacl->aces + panacl->naces;
 	     panace++) {
@@ -355,6 +360,7 @@ static fsal_status_t panfs_acl_2_fsal_acl(struct pan_fs_acl_s *panacl,
 		ace->flag = panace_info_to_fsal_flag(panace->info);
 		ace->perm = panace_perm_to_fsal_perm(panace->permissions);
 		panace_id_to_fsal_id(&panace->identity, ace);
+		print_ace(ace, __func__);
 		ace++;
 	}
 

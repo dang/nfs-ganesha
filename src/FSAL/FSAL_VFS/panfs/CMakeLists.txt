@@ -7,6 +7,7 @@ SET(fsalpanfs_LIB_SRCS
    main.c
    mds.c
    panfs_um_pnfs.c
+   ../debug.c
    ../export.c
    ../handle.c
    ../handle_syscalls.c

@@ -5,6 +5,7 @@ add_definitions(
 
 SET(fsalvfs_LIB_SRCS
    main.c
+   ../debug.c
    ../export.c
    ../handle.c
    ../handle_syscalls.c
