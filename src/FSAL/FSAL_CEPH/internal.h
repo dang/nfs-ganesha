@@ -80,6 +80,7 @@ struct handle {
 	struct export *export;	/*< The first export this handle belongs to */
 	vinodeno_t vi;		/*< The object identifier */
 	fsal_openflags_t openflags;
+	struct attrlist attributes; /*< Attributes of this Object. */
 #ifdef CEPH_PNFS
 	uint64_t rd_issued;
 	uint64_t rd_serial;
