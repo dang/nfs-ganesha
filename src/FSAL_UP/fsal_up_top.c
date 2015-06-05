@@ -369,6 +369,7 @@ static state_status_t lock_avail(struct fsal_module *fsal,
 	return STATE_SUCCESS;
 }
 
+/* @note The state_lock MUST be held for write */
 static void destroy_recall(struct state_layout_recall_file *recall)
 {
 	if (recall == NULL)
@@ -394,8 +395,9 @@ static void destroy_recall(struct state_layout_recall_file *recall)
  * @brief Create layout recall state
  *
  * This function creates the layout recall state and work list for a
- * LAYOUTRECALL operation on a file.  The state lock on the entry must
- * be held for write when this function is called.
+ * LAYOUTRECALL operation on a file.
+ *
+ * @note the state_lock MUST be held for write
  *
  * @param[in,out] obj     The file on which to send the recall
  * @param[in]     type    The layout type
@@ -598,10 +600,12 @@ state_status_t layoutrecall(struct fsal_module *fsal,
 	if (rc != STATE_SUCCESS)
 		return rc;
 
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
 	/* We build up the list before consuming it so that we have
 	   every state on the list before we start executing returns. */
 	rc = create_file_recall(obj, layout_type, segment, cookie, spec,
 				&recall);
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 	if (rc != STATE_SUCCESS)
 		goto out;
 
@@ -636,10 +640,8 @@ state_status_t layoutrecall(struct fsal_module *fsal,
 		layout->lor_offset = segment->offset;
 		layout->lor_length = segment->length;
 
-		if (!get_state_obj_export_owner_refs(s,
-						       NULL,
-						       &exp,
-						       &owner)) {
+
+		if (!get_state_obj_export_owner_refs(s, NULL, &exp, &owner)) {
 			/* The export, owner, or state_t has gone stale,
 			 * skip this entry
 			 */
@@ -815,6 +817,8 @@ static int32_t layoutrec_completion(rpc_call_t *call, rpc_call_hook hook,
 		 * return, otherwise we count it as an error.
 		 */
 
+		PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 		root_op_context.req_ctx.clientid =
 			&owner->so_owner.so_nfs4_owner.so_clientid;
 		root_op_context.req_ctx.export = export;
@@ -824,6 +828,8 @@ static int32_t layoutrec_completion(rpc_call_t *call, rpc_call_hook hook,
 				      LAYOUTRETURN4_FILE, circumstance,
 				      state, cb_data->segment, 0, NULL,
 				      &deleted);
+
+		PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 	}
 
 	if (state != NULL) {
@@ -841,6 +847,9 @@ out:
 	if (ok) {
 		/* Release the export */
 		put_gsh_export(export);
+
+		/* Release object ref */
+		obj->obj_ops.put_ref(obj);
 
 		/* Release the owner */
 		dec_state_owner_ref(owner);
@@ -881,6 +890,8 @@ static void return_one_async(void *arg)
 	ok = get_state_obj_export_owner_refs(state, &obj, &export, &owner);
 
 	if (ok) {
+		PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 		root_op_context.req_ctx.clientid =
 			&owner->so_owner.so_nfs4_owner.so_clientid;
 		root_op_context.req_ctx.export = export;
@@ -889,6 +900,8 @@ static void return_one_async(void *arg)
 		nfs4_return_one_state(obj, LAYOUTRETURN4_FILE,
 				      circumstance_revoke, state,
 				      cb_data->segment, 0, NULL, &deleted);
+
+		PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 	}
 
 	release_root_op_context();
@@ -902,6 +915,9 @@ static void return_one_async(void *arg)
 	if (ok) {
 		/* Release the export */
 		put_gsh_export(export);
+
+		/* Release object ref */
+		obj->obj_ops.put_ref(obj);
 
 		/* Release the owner */
 		dec_state_owner_ref(owner);
@@ -938,6 +954,8 @@ static void layoutrecall_one_call(void *arg)
 	ok = get_state_obj_export_owner_refs(state, &obj, &export, &owner);
 
 	if (ok) {
+		PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 		root_op_context.req_ctx.clientid =
 		    &owner->so_owner.so_nfs4_owner.so_clientid;
 		root_op_context.req_ctx.export = export;
@@ -993,6 +1011,8 @@ static void layoutrecall_one_call(void *arg)
 			++cb_data->attempts;
 		}
 
+		PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
+
 	} else {
 		gsh_free(cb_data);
 	}
@@ -1007,6 +1027,9 @@ static void layoutrecall_one_call(void *arg)
 	if (ok) {
 		/* Release the export */
 		put_gsh_export(export);
+
+		/* Release object ref */
+		obj->obj_ops.put_ref(obj);
 
 		/* Release the owner */
 		dec_state_owner_ref(owner);
@@ -1663,6 +1686,8 @@ state_status_t delegrecall_impl(struct fsal_obj_handle *obj)
 		 "FSAL_UP_DELEG: obj %p type %u",
 		 obj, obj->type);
 
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 	glist_for_each_safe(glist, glist_n, &obj->state->file.list_of_states) {
 		state = glist_entry(glist, struct state_t, state_list);
 
@@ -1692,10 +1717,9 @@ state_status_t delegrecall_impl(struct fsal_obj_handle *obj)
 		 * The owner reference will be used to get access to the
 		 * clientid and reserve the lease.
 		 */
-		if (!get_state_obj_export_owner_refs(state,
-						       NULL,
-						       &drc_ctx->drc_exp,
-						       &owner)) {
+		if (!get_state_obj_export_owner_refs(state, NULL,
+						     &drc_ctx->drc_exp,
+						     &owner)) {
 			LogDebug(COMPONENT_FSAL_UP,
 				 "Something is going stale, no need to recall delegation");
 			gsh_free(drc_ctx);
@@ -1727,6 +1751,7 @@ state_status_t delegrecall_impl(struct fsal_obj_handle *obj)
 
 		delegrecall_one(obj, state, drc_ctx);
 	}
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 	return rc;
 }
 

@@ -59,8 +59,6 @@ struct gsh_export {
 	struct glist_head exp_list;
 	/** gsh_exports are kept in an AVL tree by export_id */
 	struct avltree_node node_k;
-	/** The list of cache inode entries belonging to this export */
-	struct glist_head entry_list;
 	/** List of NFS v4 state belonging to this export */
 	struct glist_head exp_state_list;
 	/** List of locks belonging to this export */
@@ -76,7 +74,7 @@ struct gsh_export {
 	/** This export is a node in the list of mounted_exports */
 	struct glist_head mounted_exports_node;
 	/** Entry for the root of this export, protected by lock */
-	struct fsal_obj_handle *exp_root_cache_inode;
+	struct fsal_obj_handle *exp_root_obj;
 	/** Allowed clients */
 	struct glist_head clients;
 	/** Entry for the junction of this export.  Protected by lock */

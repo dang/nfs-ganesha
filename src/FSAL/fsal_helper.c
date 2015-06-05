@@ -502,7 +502,7 @@ fsal_errors_t fsal_getattr(struct fsal_obj_handle *obj,
 
 	if (errors == ERR_FSAL_CROSS_JUNCTION) {
 		struct fsal_obj_handle *junction_obj;
-		PTHREAD_RWLOCK_rdlock(&op_ctx->export->lock);
+		PTHREAD_RWLOCK_rdlock(&obj->state->state_lock);
 
 		/* Get a reference to the junction_export and remember it
 		 * only if the junction export is valid.
@@ -512,8 +512,7 @@ fsal_errors_t fsal_getattr(struct fsal_obj_handle *obj,
 			get_gsh_export_ref(obj->state->dir.junction_export);
 			junction_export = obj->state->dir.junction_export;
 		}
-
-		PTHREAD_RWLOCK_unlock(&op_ctx->export->lock);
+		PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
 		if (junction_export != NULL) {
 			fsal_status_t status =
@@ -547,6 +546,7 @@ fsal_errors_t fsal_getattr(struct fsal_obj_handle *obj,
 		errors = fsal_getattr(junction_obj, opaque, cb, CB_JUNCTION);
 
 		put_gsh_export(junction_export);
+		junction_obj->obj_ops.put_ref(junction_obj);
 	}
 
 	return errors;
@@ -630,6 +630,8 @@ fsal_status_t fsal_link(struct fsal_obj_handle *obj,
  * @param[in]  name    Name of the file that we are looking up.
  * @param[out] obj     Found file
  *
+ * @note On success, @a handle has been ref'd
+ *
  * @return FSAL status
  */
 
@@ -654,7 +656,7 @@ fsal_status_t fsal_lookup(struct fsal_obj_handle *parent,
 		return fsal_status;
 
 	if (strcmp(name, ".") == 0) {
-		/* TODO dang LATER - refcount */
+		parent->obj_ops.get_ref(parent);
 		*obj = parent;
 		return fsalstat(ERR_FSAL_NO_ERROR, 0);
 	} else if (strcmp(name, "..") == 0)
@@ -696,6 +698,7 @@ fsal_status_t fsal_lookupp(struct fsal_obj_handle *obj,
 			 * LOOKUPP will not come here, it catches the root entry
 			 * earlier.
 			 */
+			obj->obj_ops.get_ref(obj);
 			*parent = obj;
 			return fsalstat(ERR_FSAL_NO_ERROR, 0);
 		}
@@ -1054,24 +1057,44 @@ struct fsal_populate_cb_state {
 	fsal_status_t *status;
 	fsal_getattr_cb_t cb;
 	void *opaque;
+	enum cb_state cb_state;
+	unsigned int *cb_nfound;
 };
 
+static fsal_status_t
+get_dirent(struct fsal_obj_handle *obj, struct fsal_readdir_cb_parms *cb_parms,
+	   fsal_cookie_t cookie, struct fsal_populate_cb_state *state)
+{
+	fsal_status_t status = { 0, 0 };
+
+	status = fsal_refresh_attrs(obj);
+	if (FSAL_IS_ERROR(status)) {
+		LogInfo(COMPONENT_FSAL,
+			"attr refresh failed on %s in dir %p with %s",
+			cb_parms->name, obj, fsal_err_txt(status));
+		return status;
+	}
+
+	status.major = state->cb(cb_parms, obj, obj->attrs,
+				 obj->attrs->fileid, cookie, state->cb_state);
+
+	return status;
+}
+
 static bool
-populate_dirent(const char *name, void *dir_state,
-		fsal_cookie_t cookie)
+populate_dirent(const char *name, void *dir_state, fsal_cookie_t cookie)
 {
 	struct fsal_populate_cb_state *state =
 	    (struct fsal_populate_cb_state *)dir_state;
 	struct fsal_obj_handle *obj = state->directory;
-	fsal_status_t fsal_status = { 0, 0 };
-	fsal_errors_t ci_status = 0;
 	struct fsal_readdir_cb_parms cb_parms = { state->opaque, name,
-							 true, 0, true };
+		true, 0, true };
+	fsal_status_t status = { 0, 0 };
 
-	fsal_status = obj->obj_ops.lookup(obj, name, &obj);
-	if (FSAL_IS_ERROR(fsal_status)) {
-		*state->status = fsal_status;
-		if (fsal_status.major == ERR_FSAL_XDEV) {
+	status = obj->obj_ops.lookup(obj, name, &obj);
+	if (FSAL_IS_ERROR(status)) {
+		*state->status = status;
+		if (status.major == ERR_FSAL_XDEV) {
 			LogInfo(COMPONENT_NFS_READDIR,
 				"Ignoring XDEV entry %s",
 				name);
@@ -1080,27 +1103,69 @@ populate_dirent(const char *name, void *dir_state,
 		}
 		LogInfo(COMPONENT_FSAL,
 			"Lookup failed on %s in dir %p with %s",
-			name, obj, fsal_err_txt(fsal_status));
+			name, obj, fsal_err_txt(status));
 		return false;
 	}
 
-	fsal_status = fsal_refresh_attrs(obj);
-	if (FSAL_IS_ERROR(fsal_status)) {
-		LogInfo(COMPONENT_FSAL,
-			"attr refresh failed on %s in dir %p with %s",
-			name, obj, fsal_err_txt(fsal_status));
-		return false;
-	}
+	status = get_dirent(obj, &cb_parms, cookie, state);
+	if (status.major == ERR_FSAL_CROSS_JUNCTION) {
+		struct fsal_obj_handle *junction_obj;
+		struct gsh_export *junction_export;
 
-	ci_status = state->cb(&cb_parms, obj, obj->attrs,
-		       obj->attrs->fileid, cookie, CB_ORIGINAL);
-	if (ci_status == ERR_FSAL_CROSS_JUNCTION) {
-		/* XXX dang junction */
-		return false;
+		PTHREAD_RWLOCK_rdlock(&obj->state->state_lock);
+
+		/* Get a reference to the junction_export and remember it
+		 * only if the junction export is valid.
+		 */
+		if (obj->state->dir.junction_export != NULL &&
+		    export_ready(obj->state->dir.junction_export)) {
+			get_gsh_export_ref(obj->state->dir.junction_export);
+			junction_export = obj->state->dir.junction_export;
+		}
+
+		PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
+
+		/* Get the root of the export across the junction. */
+		if (junction_export != NULL) {
+			status = nfs_export_get_root_entry(junction_export,
+							   &junction_obj);
+
+			if (FSAL_IS_ERROR(status)) {
+				LogMajor(COMPONENT_FSAL,
+					 "Failed to get root for %s, id=%d, status = %s",
+					 junction_export->fullpath,
+					 junction_export->export_id,
+					 fsal_err_txt(status));
+				/* Need to signal problem to callback */
+				state->cb_state = CB_PROBLEM;
+				(void) state->cb(&cb_parms, NULL, NULL, 0,
+						 cookie, state->cb_state);
+				return false;
+			}
+		} else {
+			LogMajor(COMPONENT_FSAL,
+				 "A junction became stale");
+			/* Need to signal problem to callback */
+			state->cb_state = CB_PROBLEM;
+			(void) state->cb(&cb_parms, NULL, NULL, 0, cookie,
+					 state->cb_state);
+			return false;
+		}
+
+		/* Now call the callback again with that. */
+		state->cb_state = CB_JUNCTION;
+		status = get_dirent(junction_obj, &cb_parms, cookie, state);
+		state->cb_state = CB_ORIGINAL;
+
+		/* Release our refs */
+		junction_obj->obj_ops.put_ref(junction_obj);
+		put_gsh_export(junction_export);
 	}
 
 	if (!cb_parms.in_result)
 		return false;
+
+	(*state->cb_nfound)++;
 
 	return true;
 }
@@ -1126,6 +1191,7 @@ populate_dirent(const char *name, void *dir_state,
 
 fsal_status_t fsal_readdir(struct fsal_obj_handle *directory,
 		    uint64_t cookie,
+		    unsigned int *nbfound,
 		    bool *eod_met,
 		    attrmask_t attrmask,
 		    fsal_getattr_cb_t cb,
@@ -1135,6 +1201,8 @@ fsal_status_t fsal_readdir(struct fsal_obj_handle *directory,
 	fsal_status_t attr_status = {0, 0};
 	fsal_status_t cb_status = {0, 0};
 	struct fsal_populate_cb_state state;
+
+	*nbfound = 0;
 
 	/* The access mask corresponding to permission to list directory
 	   entries */
@@ -1191,6 +1259,8 @@ fsal_status_t fsal_readdir(struct fsal_obj_handle *directory,
 	state.status = &cb_status;
 	state.cb = cb;
 	state.opaque = opaque;
+	state.cb_state = CB_ORIGINAL;
+	state.cb_nfound = nbfound;
 
 	fsal_status = directory->obj_ops.readdir(directory, &cookie,
 						 (void *)&state,
@@ -1204,7 +1274,7 @@ fsal_status_t fsal_readdir(struct fsal_obj_handle *directory,
  *
  * @brief Remove a name from a directory.
  *
- * @param[in] obj     Handle for the parent directory to be managed
+ * @param[in] parent  Handle for the parent directory to be managed
  * @param[in] name    Name to be removed
  *
  * @retval fsal_status_t
@@ -1238,14 +1308,20 @@ fsal_remove(struct fsal_obj_handle *parent, const char *name)
 		isdir = true;
 #endif /* ENABLE_RFC_ACL */
 
-		if (to_remove_obj->state->dir.junction_export != NULL) {
+		PTHREAD_RWLOCK_rdlock(&to_remove_obj->state->state_lock);
+		if (to_remove_obj->state->dir.junction_export != NULL ||
+		    atomic_fetch_int32_t(
+			&to_remove_obj->state->dir.exp_root_refcount) != 0) {
 			/* Trying to remove an export mount point */
 			LogCrit(COMPONENT_FSAL, "Attempt to remove export %s",
 				name);
 
+			PTHREAD_RWLOCK_unlock(
+					&to_remove_obj->state->state_lock);
 			status = fsalstat(ERR_FSAL_NOTEMPTY, 0);;
 			goto out;
 		}
+		PTHREAD_RWLOCK_unlock(&to_remove_obj->state->state_lock);
 	}
 
 	LogDebug(COMPONENT_FSAL, "%s", name);
@@ -1279,7 +1355,14 @@ fsal_remove(struct fsal_obj_handle *parent, const char *name)
 	}
 
 	status = fsal_refresh_attrs(parent);
+	if (FSAL_IS_ERROR(status)) {
+		LogFullDebug(COMPONENT_FSAL,
+			     "not sure this code makes sense %s failure %s",
+			     name, fsal_err_txt(status));
+		goto out;
+	}
 
+	status = fsal_refresh_attrs(to_remove_obj);
 	if (FSAL_IS_ERROR(status)) {
 		LogFullDebug(COMPONENT_FSAL,
 			     "not sure this code makes sense %s failure %s",
@@ -1288,6 +1371,9 @@ fsal_remove(struct fsal_obj_handle *parent, const char *name)
 	}
 
 out:
+	if (to_remove_obj)
+		to_remove_obj->obj_ops.put_ref(to_remove_obj);
+
 	LogFullDebug(COMPONENT_FSAL, "remove %s: status=%s", name,
 		     fsal_err_txt(status));
 
@@ -1335,11 +1421,19 @@ nfsstat4 fsal_rename(struct fsal_obj_handle *dir_src,
 	}
 
 	/* Do not rename a junction node or an export root. */
-	if (lookup_src->type == DIRECTORY &&
-	    lookup_src->state->dir.junction_export != NULL) {
-		/* Trying to rename an export mount point */
-		LogCrit(COMPONENT_FSAL, "Attempt to rename export %s", oldname);
-		return NFS4ERR_NOTEMPTY;
+	if (lookup_src->type == DIRECTORY) {
+		PTHREAD_RWLOCK_rdlock(&lookup_src->state->state_lock);
+
+		if ((lookup_src->state->dir.junction_export != NULL ||
+		     atomic_fetch_int32_t(
+			&lookup_src->state->dir.exp_root_refcount) != 0)) {
+			/* Trying to rename an export mount point */
+			PTHREAD_RWLOCK_unlock(&lookup_src->state->state_lock);
+			LogCrit(COMPONENT_FSAL, "Attempt to rename export %s",
+				oldname);
+			return NFS4ERR_NOTEMPTY;
+		}
+		PTHREAD_RWLOCK_unlock(&lookup_src->state->state_lock);
 	}
 
 	/* Check if an object with the new name exists in the destination

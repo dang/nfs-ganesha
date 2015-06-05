@@ -472,23 +472,3 @@ fsal_status_t gpfs_close(struct fsal_obj_handle *obj_hdl)
 	return status;
 }
 
-/* gpfs_lru_cleanup
- * free non-essential resources at the request of cache inode's
- * LRU processing identifying this handle as stale enough for resource
- * trimming.
- */
-
-fsal_status_t gpfs_lru_cleanup(struct fsal_obj_handle *obj_hdl,
-			       lru_actions_t requests)
-{
-	struct gpfs_fsal_obj_handle *myself;
-	fsal_status_t status = { ERR_FSAL_NO_ERROR, 0 };
-
-	myself = container_of(obj_hdl, struct gpfs_fsal_obj_handle, obj_handle);
-	if (obj_hdl->type == REGULAR_FILE && myself->u.file.fd >= 0) {
-		status = fsal_internal_close(myself->u.file.fd, NULL, 0);
-		myself->u.file.fd = -1;
-		myself->u.file.openflags = FSAL_O_CLOSED;
-	}
-	return status;
-}

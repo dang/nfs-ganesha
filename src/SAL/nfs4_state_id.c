@@ -1194,6 +1194,7 @@ nfsstat4 nfs4_Check_Stateid(stateid4 *stateid, struct fsal_obj_handle *fsal_obj,
  success:
 
 	if (obj2 != NULL) {
+		obj2->obj_ops.put_ref(obj2);
 		dec_state_owner_ref(owner2);
 	}
 

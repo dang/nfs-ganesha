@@ -602,10 +602,8 @@ void release_openstate(state_owner_t *owner)
 			       &state->state_owner_list);
 
 		/* Get references to the file and export */
-		ok = get_state_obj_export_owner_refs(state,
-						       &obj,
-						       &export,
-						       NULL);
+		ok = get_state_obj_export_owner_refs(state, &obj, &export,
+						     NULL);
 
 		if (!ok) {
 			/* The file, export, or state must be about to
@@ -640,6 +638,9 @@ void release_openstate(state_owner_t *owner)
 
 		/* Close the file in FSAL through the cache inode */
 		obj->obj_ops.close(obj);
+
+		/* Release ref we held during state_del */
+		obj->obj_ops.put_ref(obj);
 	}
 
 	if (errcnt == STATE_ERR_MAX) {
@@ -787,10 +788,8 @@ void state_export_release_nfs4_state(void)
 		}
 
 
-		if (!get_state_obj_export_owner_refs(state,
-						       &obj,
-						       NULL,
-						       &owner)) {
+		if (!get_state_obj_export_owner_refs(state, &obj, NULL,
+						     &owner)) {
 			/* This state_t is in the process of being destroyed,
 			 * skip it.
 			 */
@@ -819,6 +818,8 @@ void state_export_release_nfs4_state(void)
 			errcnt++;
 		}
 
+		/* Release the references taken above */
+		obj->obj_ops.put_ref(obj);
 		dec_state_owner_ref(owner);
 		dec_state_t_ref(state);
 		if (errcnt < STATE_ERR_MAX) {
@@ -855,10 +856,8 @@ void state_export_release_nfs4_state(void)
 		glist_add_tail(&op_ctx->export->exp_state_list,
 			       &state->state_export_list);
 
-		if (!get_state_obj_export_owner_refs(state,
-						       &obj,
-						       NULL,
-						       &owner)) {
+		if (!get_state_obj_export_owner_refs(state, &obj, NULL,
+						     &owner)) {
 			/* This state_t is in the process of being destroyed,
 			 * skip it.
 			 */
@@ -895,6 +894,7 @@ void state_export_release_nfs4_state(void)
 		}
 
 		/* Release the references taken above */
+		obj->obj_ops.put_ref(obj);
 		dec_state_owner_ref(owner);
 		dec_state_t_ref(state);
 	}

@@ -51,7 +51,7 @@ cache_inode_status_t up_get(struct fsal_module *fsal,
 			    struct gsh_buffdesc *handle,
 			    struct fsal_obj_handle **obj)
 {
-#if 0
+#if 0 /* XXX dang */
 	cih_latch_t latch;
 	struct cache_inode_key key;
 

@@ -232,9 +232,26 @@ struct fsal_ops def_fsal_ops = {
 	.fsal_pnfs_ds_ops = fsal_pnfs_ds_ops,
 };
 
+/* get_name
+ * default case is to return the name of the FSAL
+ */
+
+static char *get_name(struct fsal_export *exp_hdl)
+{
+	return exp_hdl->fsal->name;
+}
+
+/* export_unexport
+ * Nothing to do in the default case
+ */
+
+static void export_unexport(struct fsal_export *exp_hdl)
+{
+	/* return */
+}
+
 /* export_release
- * default case is to throw a fault error.
- * creating an export is not supported so getting here is bad
+ * Nothing to do in the default case
  */
 
 static void export_release(struct fsal_export *exp_hdl)
@@ -507,6 +524,8 @@ static void global_verifier(struct gsh_buffdesc *verf_desc)
  */
 
 struct export_ops def_export_ops = {
+	.get_name = get_name,
+	.unexport = export_unexport,
 	.release = export_release,
 	.lookup_path = lookup_path,
 	.lookup_junction = lookup_junction,
@@ -965,16 +984,6 @@ static fsal_status_t remove_extattr_by_name(struct fsal_obj_handle *obj_hdl,
 	return fsalstat(ERR_FSAL_NOTSUPP, 0);
 }
 
-/* lru_cleanup
- * default case always be happy
- */
-
-static fsal_status_t lru_cleanup(struct fsal_obj_handle *obj_hdl,
-				 lru_actions_t requests)
-{
-	return fsalstat(ERR_FSAL_NO_ERROR, 0);
-}
-
 /* handle_digest
  * default case server fault
  */
@@ -1129,7 +1138,6 @@ struct fsal_obj_ops def_handle_ops = {
 	.remove_extattr_by_id = remove_extattr_by_id,
 	.remove_extattr_by_name = remove_extattr_by_name,
 	.handle_is = handle_is,
-	.lru_cleanup = lru_cleanup,
 	.handle_digest = handle_digest,
 	.handle_cmp = handle_cmp,
 	.handle_to_key = handle_to_key,

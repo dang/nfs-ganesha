@@ -337,6 +337,16 @@ typedef struct compound_data {
 typedef int (*nfs4_op_function_t) (struct nfs_argop4 *, compound_data_t *,
 				   struct nfs_resop4 *);
 
+/**
+ * @brief Set the current entry in the context
+ *
+ * This manages refcounting on the object being stored in data.  This means it
+ * takes a ref on a new object, and releases it's ref on any old object.  If the
+ * caller has it's own ref, it must release it itself.
+ *
+ * @param[in] data	Compound data to set entry in
+ * @param[in] obj	Object to set
+ */
 static inline void set_current_entry(compound_data_t *data,
 				     struct fsal_obj_handle *obj)
 {
@@ -349,6 +359,10 @@ static inline void set_current_entry(compound_data_t *data,
 		data->current_ds = NULL;
 	}
 
+	if (data->current_obj)
+		/* Release ref on old object */
+		data->current_obj->obj_ops.put_ref(data->current_obj);
+
 	data->current_obj = obj;
 
 	if (obj == NULL) {
@@ -356,8 +370,51 @@ static inline void set_current_entry(compound_data_t *data,
 		return;
 	}
 
+	/* Get our ref on the new object */
+	data->current_obj->obj_ops.get_ref(data->current_obj);
+
 	/* Set the current file type */
 	data->current_filetype = obj->type;
+}
+
+/**
+ * @brief Set the saved entry in the context
+ *
+ * This manages refcounting on the object being stored in data.  This means it
+ * takes a ref on a new object, and releases it's ref on any old object.  If the
+ * caller has it's own ref, it must release it itself.
+ *
+ * @param[in] data	Compound data to set entry in
+ * @param[in] obj	Object to set
+ */
+static inline void set_saved_entry(compound_data_t *data,
+				   struct fsal_obj_handle *obj)
+{
+	/* Mark saved_stateid as invalid */
+	data->saved_stateid_valid = false;
+
+	/* Clear out the saved_ds */
+	if (data->saved_ds) {
+		ds_handle_put(data->saved_ds);
+		data->saved_ds = NULL;
+	}
+
+	if (data->saved_obj)
+		/* Release ref on old object */
+		data->saved_obj->obj_ops.put_ref(data->saved_obj);
+
+	data->saved_obj = obj;
+
+	if (obj == NULL) {
+		data->saved_filetype = NO_FILE_TYPE;
+		return;
+	}
+
+	/* Get our ref on the new object */
+	data->saved_obj->obj_ops.get_ref(data->saved_obj);
+
+	/* Set the saved file type */
+	data->saved_filetype = obj->type;
 }
 
 #endif				/* NFS_PROTO_DATA_H */

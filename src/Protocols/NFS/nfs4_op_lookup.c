@@ -202,6 +202,9 @@ int nfs4_op_lookup(struct nfs_argop4 *op, compound_data_t *data,
 
 	/* Keep the pointer within the compound data */
 	set_current_entry(data, file_obj);
+
+	/* Put our ref */
+	file_obj->obj_ops.put_ref(file_obj);
 	file_obj = NULL;
 
 	/* Return successfully */

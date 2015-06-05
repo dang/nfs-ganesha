@@ -626,8 +626,39 @@ struct export_ops {
 /**@{*/
 
 /**
+* Export information
+*/
+
+/**
+ * @brief Get the name of the FSAL provisioning the export
+ *
+ * This function is used to find the name of the ultimate FSAL providing the
+ * filesystem.  If FSALs are stacked, then the super-FSAL may want to pass this
+ * through to the sub-FSAL to get the name, or add the sub-FSAL's name onto it's
+ * own name.
+ *
+ * @param[in] exp_hdl The export to query.
+ * @return Name of FSAL provisioning export
+ */
+	 char *(*get_name)(struct fsal_export *exp_hdl);
+/**@}*/
+
+/**@{*/
+
+/**
 * Export lifecycle management.
 */
+
+/**
+ * @brief Clean up an export when it's unexported
+ *
+ * This function is called when the export is unexported.  It should release any
+ * working data that is not necessary when unexported, but not free the export
+ * itself, as there are still references to it.
+ *
+ * @param[in] exp_hdl The export to unexport.
+ */
+	 void (*unexport)(struct fsal_export *exp_hdl);
 
 /**
  * @brief Finalize an export
@@ -655,6 +686,8 @@ struct export_ops {
  * @param[in]  exp_hdl The export in which to look up
  * @param[in]  path    The path to look up
  * @param[out] handle  The object found
+ *
+ * @note On success, @a handle has been ref'd
  *
  * @return FSAL status.
  */
@@ -719,6 +752,8 @@ struct export_ops {
  * @param[in]  exp_hdl  The export in which to create the handle
  * @param[in]  hdl_desc Buffer descriptor for the "wire" handle
  * @param[out] handle   FSAL object handle
+ *
+ * @note On success, @a handle has been ref'd
  *
  * @return FSAL status.
  */
@@ -1113,7 +1148,8 @@ struct fsal_obj_ops {
  * @brief Get a reference to a handle
  *
  * If refcounting is done, get a reference.  Initial handle should have a
- * reference already taken.
+ * reference already taken.  Functions that return a pre-referenced handle are
+ * listed below
  *
  * @param[in] obj_hdl Handle to release
  */
@@ -1159,6 +1195,8 @@ struct fsal_obj_ops {
  * @param[in]  dir_hdl Directory to search
  * @param[in]  path    Name to look up
  * @param[out] handle  Object found
+ *
+ * @note On success, @a handle has been ref'd
  *
  * @return FSAL status.
  */
@@ -1207,6 +1245,8 @@ struct fsal_obj_ops {
  *                        object/attributes you actually got.
  * @param[out]    new_obj Newly created object
  *
+ * @note On success, @a new_obj has been ref'd
+ *
  * @return FSAL status.
  */
 	 fsal_status_t (*create)(struct fsal_obj_handle *dir_hdl,
@@ -1223,6 +1263,8 @@ struct fsal_obj_ops {
  * @param[in,out] attrib  Attributes to set on newly created
  *                        object/attributes you actually got.
  * @param[out]    new_obj Newly created object
+ *
+ * @note On success, @a new_obj has been ref'd
  *
  * @return FSAL status.
  */
@@ -1244,6 +1286,8 @@ struct fsal_obj_ops {
  *                         object/attributes you actually got.
  * @param[out]    new_obj  Newly created object
  *
+ * @note On success, @a new_obj has been ref'd
+ *
  * @return FSAL status.
  */
 	 fsal_status_t (*mknode)(struct fsal_obj_handle *dir_hdl,
@@ -1264,6 +1308,8 @@ struct fsal_obj_ops {
  * @param[in,out] attrib    Attributes to set on newly created
  *                          object/attributes you actually got.
  * @param[out] new_obj      Newly created object
+ *
+ * @note On success, @a new_obj has been ref'd
  *
  * @return FSAL status.
  */
@@ -1827,21 +1873,6 @@ struct fsal_obj_ops {
 			   object_file_type_t type);
 
 /**
- * @brief Perform cleanup as requested by the LRU
- *
- * This function performs cleanup tasks as requested by the LRU
- * thread, specifically to close file handles or free memory
- * associated with a file.
- *
- * @param[in] obj_hdl  File to clean up
- * @param[in] requests Things to clean up about file
- *
- * @return FSAL status
- */
-	 fsal_status_t (*lru_cleanup)(struct fsal_obj_handle *obj_hdl,
-				      lru_actions_t requests);
-
-/**
  * @brief Write wire handle
  *
  * This function writes a "wire" handle or file ID to the given
@@ -2253,6 +2284,18 @@ struct fsal_module {
 					    manipulating its lists (above). */
 	int32_t refcount;		/*< Reference count */
 };
+
+/**
+ * @brief Get a reference to a module
+ *
+ * @param[in] fsal_hdl FSAL on which to acquire reference.
+ */
+
+static inline void fsal_get(struct fsal_module *fsal_hdl)
+{
+	atomic_inc_int32_t(&fsal_hdl->refcount);
+	assert(fsal_hdl->refcount > 0);
+}
 
 /**
  * @brief Relinquish a reference to the module

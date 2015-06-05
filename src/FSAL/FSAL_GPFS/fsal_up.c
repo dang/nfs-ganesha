@@ -27,7 +27,6 @@
 #include "fsal_up.h"
 #include "fsal_internal.h"
 #include "fsal_convert.h"
-#include "cache_inode.h"
 #include "gpfs_methods.h"
 #include <sys/types.h>
 #include <unistd.h>
@@ -302,8 +301,12 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 				if (flags & (UP_SIZE | UP_SIZE_BIG)) {
 					rc = event_func->invalidate(
 						gpfs_fs->fs->fsal, &key,
+#if DFG_LATER
 						CACHE_INODE_INVALIDATE_ATTRS |
 						CACHE_INODE_INVALIDATE_CONTENT);
+#else
+						0);
+#endif
 					break;
 				}
 
@@ -314,8 +317,12 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 				     UP_TIMES | UP_ATIME | UP_SIZE_BIG)) {
 					rc = event_func->invalidate(
 						gpfs_fs->fs->fsal, &key,
+#if DFG_LATER
 						CACHE_INODE_INVALIDATE_ATTRS |
 						CACHE_INODE_INVALIDATE_CONTENT);
+#else
+						0);
+#endif
 				} else {
 					attr.mask = 0;
 					if (flags & UP_SIZE)
@@ -382,8 +389,12 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 				    "inode invalidate: flags:%x update ino %ld",
 				    flags, callback.buf->st_ino);
 
+#if DFG_LATER
 			upflags = CACHE_INODE_INVALIDATE_ATTRS |
 				  CACHE_INODE_INVALIDATE_CONTENT;
+#else
+			upflags = 0;
+#endif
 			rc = event_func->invalidate_close(
 						gpfs_fs->fs->fsal,
 						event_func,
@@ -404,11 +415,13 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 			continue;
 		}
 
+#if DFG_LATER
 		if (rc && rc != CACHE_INODE_NOT_FOUND) {
 			LogWarn(COMPONENT_FSAL_UP,
 				"Event %d could not be processed for fd %d rc %d",
 				reason, gpfs_fs->root_fd, rc);
 		}
+#endif
 	}
 
 	return NULL;

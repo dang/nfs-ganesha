@@ -475,8 +475,8 @@ nfsstat4 deleg_revoke(struct fsal_obj_handle *obj, struct state_t *deleg_state)
 	/* Get reference to owner and export. Onwer reference also protects
 	 * the clientid.
 	 */
-	if (!get_state_obj_export_owner_refs(deleg_state, NULL,
-					       &export, &owner)) {
+	if (!get_state_obj_export_owner_refs(deleg_state, NULL, &export,
+					     &owner)) {
 		/* Something is going stale. */
 		LogDebug(COMPONENT_NFS_V4_LOCK,
 			 "Stale state, owner, or export");

@@ -31,8 +31,6 @@
 #include "log.h"
 #include "fsal.h"
 #include "nfs_core.h"
-/*#include "cache_inode.h"*/
-/*#include "cache_inode_lru.h"*/
 #include "nfs_file_handle.h"
 #include "nfs_exports.h"
 #include "nfs_ip_stats.h"
@@ -53,6 +51,9 @@
 #include "fsal_up.h"
 #include "sal_functions.h"
 #include "pnfs_utils.h"
+
+/* XXX dang this should be removed at some point */
+#include "../FSAL/Stackable_FSALs/FSAL_MDCACHE/mdcache_ext.h"
 
 struct global_export_perms export_opt = {
 	.def.anonymous_uid = ANON_UID,
@@ -573,10 +574,10 @@ static int fsal_cfg_commit(void *node, void *link_mem, void *self_struct,
 	status = fsal->m_ops.create_export(fsal,
 					   node, err_type,
 					  &fsal_up_top);
-#ifdef _USE_CACHE_INODE
+
+	/* XXX dang - Move this outside of MDCACHE ? */
 	if ((export->options_set & EXPORT_OPTION_EXPIRE_SET) == 0)
 		export->expire_time_attr = mdcache_param.expire_time_attr;
-#endif /* _USE_CACHE_INODE */
 
 	if (FSAL_IS_ERROR(status)) {
 		fsal_put(fsal);
@@ -1604,7 +1605,7 @@ int init_export_root(struct gsh_export *export)
 
 	PTHREAD_RWLOCK_wrlock(&export->lock);
 
-	export->exp_root_cache_inode = root_handle;
+	export->exp_root_obj = root_handle;
 
 	PTHREAD_RWLOCK_unlock(&export->lock);
 
@@ -1640,8 +1641,8 @@ release_export_root_locked(struct gsh_export *export, struct fsal_obj_handle *ob
 	PTHREAD_RWLOCK_wrlock(&export->lock);
 
 	glist_del(&export->exp_root_list);
-	root_obj = export->exp_root_cache_inode;
-	export->exp_root_cache_inode = NULL;
+	root_obj = export->exp_root_obj;
+	export->exp_root_obj = NULL;
 
 	LogDebug(COMPONENT_EXPORT,
 		 "Released root obj %p for path %s on export_id=%d",
@@ -1685,10 +1686,8 @@ static inline void clean_up_export(struct gsh_export *export)
 	/* Release state belonging to this export */
 	state_release_export(export);
 
-#ifdef _USE_CACHE_INODE
-	/* Flush cache inodes belonging to this export */
-	cache_inode_unexport(export);
-#endif /* _USE_CACHE_INODE */
+	/* Flush FSAL-specific state */
+	export->fsal_export->exp_ops.unexport(export->fsal_export);
 }
 
 void unexport(struct gsh_export *export)

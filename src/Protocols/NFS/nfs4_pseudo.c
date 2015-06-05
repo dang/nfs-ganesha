@@ -124,12 +124,12 @@ void cleanup_pseudofs_node(char *pseudopath,
 	}
 
 	/* Before recursing the check the parent, get export lock for looking at
-	 * exp_root_cache_inode so we can check if we have reached the root of
+	 * exp_root_obj so we can check if we have reached the root of
 	 * the mounted on export.
 	 */
 	PTHREAD_RWLOCK_rdlock(&op_ctx->export->lock);
 
-	if (parent_obj == op_ctx->export->exp_root_cache_inode) {
+	if (parent_obj == op_ctx->export->exp_root_obj) {
 		LogDebug(COMPONENT_EXPORT,
 			 "Reached root of PseudoFS %s",
 			 op_ctx->export->pseudopath);
@@ -197,7 +197,8 @@ retry:
 		return false;
 	}
 
-	if (strcmp(op_ctx->export->fsal_export->fsal->name,
+	if (strcmp(op_ctx->export->fsal_export->exp_ops.get_name(
+				 op_ctx->export->fsal_export),
 		   "PSEUDO") != 0) {
 		/* Only allowed to create directories on FSAL_PSEUDO */
 		LogCrit(COMPONENT_EXPORT,
@@ -499,21 +500,20 @@ void pseudo_unmount_export(struct gsh_export *export)
 
 	junction_inode = export->exp_junction_obj;
 
-#if 0
 	if (junction_inode != NULL) {
-		/* XXX dang handle junction */
 		/* Clean up the junction inode */
 
-		/* Take an LRU reference */
-		(void) cache_inode_lru_ref(junction_inode, LRU_REQ_STALE_OK);
+		/* Take a reference XXX dang I don't think this is necessary */
+		junction_inode->obj_ops.get_ref(junction_inode);
 
 		/* Release the export lock so we can take attr_lock */
 		PTHREAD_RWLOCK_unlock(&export->lock);
 
 		/* Take the attr_lock so we can check if the export is still
 		 * connected to the junction_inode.
+		 * XXX dang locking
 		 */
-		PTHREAD_RWLOCK_wrlock(&junction_inode->attr_lock);
+		/*PTHREAD_RWLOCK_wrlock(&junction_inode->attr_lock);*/
 
 		/* Take the export write lock to clean out the junction
 		 * information.
@@ -521,15 +521,14 @@ void pseudo_unmount_export(struct gsh_export *export)
 		PTHREAD_RWLOCK_wrlock(&export->lock);
 
 		/* Make the node not accessible from the junction node. */
-		junction_inode->object.dir.junction_export = NULL;
+		junction_inode->state->dir.junction_export = NULL;
 
 		/* Detach the export from the inode */
-		export->exp_junction_inode = NULL;
+		export->exp_junction_obj = NULL;
 
 		/* Release the attr_lock */
-		PTHREAD_RWLOCK_unlock(&junction_inode->attr_lock);
+		/*PTHREAD_RWLOCK_unlock(&junction_inode->attr_lock);*/
 	}
-#endif
 
 	/* Detach the export from the export it's mounted on */
 	mounted_on_export = export->exp_parent_exp;
@@ -570,5 +569,14 @@ void pseudo_unmount_export(struct gsh_export *export)
 
 		/* Release our reference to the export we are mounted on. */
 		put_gsh_export(mounted_on_export);
+	}
+
+	if (junction_inode != NULL) {
+		/* Release the pin reference */
+		/* XXX dang pin */
+		/*cache_inode_dec_pin_ref(junction_inode, false);*/
+
+		/* Release the LRU reference */
+		junction_inode->obj_ops.put_ref(junction_inode);
 	}
 }

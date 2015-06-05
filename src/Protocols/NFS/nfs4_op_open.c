@@ -301,6 +301,9 @@ static nfsstat4 open4_do_open(struct nfs_argop4 *op, compound_data_t *data,
  * This function creates an NFSv4 filehandle from the supplied file
  * and sets it to be the current filehandle.
  *
+ * @note This calls @ref set_current_entry which takes a ref; this then drops
+ * it's ref.
+ *
  * @param[in,out] data   Compound's data
  * @param[in]     obj    File
  *
@@ -318,6 +321,9 @@ static nfsstat4 open4_create_fh(compound_data_t *data,
 
 	/* Update the current entry */
 	set_current_entry(data, obj);
+
+	/* Put our ref */
+	obj->obj_ops.put_ref(obj);
 
 	return NFS4_OK;
 }
@@ -1315,10 +1321,6 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
 							     &obj,
 							     &created);
 			if (res_OPEN4->status == NFS4_OK) {
-				/* Decrement the current entry here, because
-				 * nfs4_create_fh replaces the current fh.
-				 */
-				set_current_entry(data, NULL);
 				res_OPEN4->status = open4_create_fh(data, obj);
 			}
 		}

@@ -379,27 +379,31 @@ struct state_obj {
  *
  * Each state is identified by stateid and represents some resource or
  * set of resources.
+ *
+ * The lists are protected by the state_lock
  */
 
 struct state_t {
-	struct glist_head state_list;	/*< List of states on a file */
-	struct glist_head state_owner_list;  /*< List of states for an owner */
-	struct glist_head state_export_list; /*< List of states on the same
+	struct glist_head state_list;	/**< List of states on a file */
+	struct glist_head state_owner_list;  /**< List of states for an owner */
+	struct glist_head state_export_list; /**< List of states on the same
 						 export */
 #ifdef DEBUG_SAL
-	struct glist_head state_list_all;    /*< Global list of all stateids */
+	struct glist_head state_list_all;    /**< Global list of all stateids */
 #endif
-	pthread_mutex_t state_mutex; /*< Mutex protecting following pointers */
-	struct gsh_export *state_export; /*< Export this entry belongs to */
-	state_owner_t *state_owner;	/*< State Owner related to this state */
-	struct state_obj state_obj;	/*< digest of owning object */
+	pthread_mutex_t state_mutex; /**< Mutex protecting following pointers and
+				       above lists */
+	struct gsh_export *state_export; /**< Export this entry belongs to */
+	/* Don't re-order or move these next two.  They are used for hashing */
+	state_owner_t *state_owner;	/**< State Owner related to this state */
+	struct state_obj state_obj;	/**< digest of owning object */
 	union state_data state_data;
 	enum state_type state_type;
-	u_int32_t state_seqid;		/*< The NFSv4 Sequence id */
-	int32_t state_refcount;		/*< Refcount for state_t objects */
-	char stateid_other[OTHERSIZE];	/*< "Other" part of state id,
+	u_int32_t state_seqid;		/**< The NFSv4 Sequence id */
+	int32_t state_refcount;		/**< Refcount for state_t objects */
+	char stateid_other[OTHERSIZE];	/**< "Other" part of state id,
 					   used as hash key */
-	struct state_refer state_refer;	/*< For NFSv4.1, track the
+	struct state_refer state_refer;	/**< For NFSv4.1, track the
 					   call that created a
 					   state. */
 };
@@ -878,18 +882,18 @@ struct file_deleg_stats {
 struct state_file {
 	/** File owning state */
 	struct fsal_obj_handle *obj;
-	/** NFSv4 states on this file */
+	/** NFSv4 states on this file. Protected by state_lock */
 	struct glist_head list_of_states;
-	/** Layout recalls on this file */
+	/** Layout recalls on this file. Protected by state_lock */
 	struct glist_head layoutrecall_list;
-	/** Pointers for lock list */
+	/** Pointers for lock list. Protected by state_lock */
 	struct glist_head lock_list;
-	/** Pointers for NLM share list */
+	/** Pointers for NLM share list. Protected by state_lock */
 	struct glist_head nlm_share_list;
-	/** Share reservation state for this file. */
+	/** Share reservation state for this file. Protected by state_lock */
 	sal_share_t share_state;
 	bool write_delegated; /* true iff write delegated */
-	/** Delegation statistics */
+	/** Delegation statistics. Protected by state_lock */
 	struct file_deleg_stats fdeleg_stats;
 	uint32_t anon_ops;   /* number of anonymous operations
 			      * happening at the moment which
@@ -897,16 +901,23 @@ struct state_file {
 			      * granted */
 };
 
+/**
+ * @brief Per-directory state lists
+ *
+ * To be used by FSALs/SAL
+ */
 struct state_dir {
-	/** If this is a junction, the export this node points
-	  to. Protected by the attr_lock. */
+	/** If this is a junction, the export this node points to.
+	 * Protected by state_lock. */
 	struct gsh_export *junction_export;
-	/** List of exports that have this cache inode
-	  as their root. Protected by the attr_lock. */
+	/** List of exports that have this cache inode as their root.
+	 * Protected by state_lock */
 	struct glist_head export_roots;
 };
 
 struct state_hdl {
+	/** Lock protecting state */
+	pthread_rwlock_t state_lock;
 	union {
 		struct state_file	file;
 		struct state_dir	dir;

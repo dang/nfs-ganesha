@@ -588,6 +588,9 @@ static state_lock_entry_t *create_state_lock_entry(struct fsal_obj_handle *obj,
 	PTHREAD_RWLOCK_unlock(&export->lock);
 	get_gsh_export_ref(export);
 
+	/* Get ref for sle_obj */
+	obj->obj_ops.get_ref(obj);
+
 	/* Add to list of locks owned by owner */
 	inc_state_owner_ref(owner);
 
@@ -672,6 +675,7 @@ static void lock_entry_dec_ref(state_lock_entry_t *lock_entry)
 		PTHREAD_MUTEX_unlock(&all_locks_mutex);
 #endif
 
+		lock_entry->sle_obj->obj_ops.put_ref(lock_entry->sle_obj);
 		put_gsh_export(lock_entry->sle_export);
 		PTHREAD_MUTEX_destroy(&lock_entry->sle_mutex);
 		gsh_free(lock_entry);
@@ -2312,7 +2316,7 @@ state_status_t state_test(struct fsal_obj_handle *obj,
 
 	LogLock(COMPONENT_STATE, NIV_FULL_DEBUG, "TEST", obj, owner, lock);
 
-	fsal_status = obj->obj_ops.open(obj, FSAL_O_READ);
+	fsal_status = fsal_open(obj, FSAL_O_READ);
 	if (FSAL_IS_ERROR(fsal_status)) {
 		status = state_error_convert(fsal_status);
 		LogFullDebug(COMPONENT_STATE, "Could not open file");
@@ -2387,6 +2391,8 @@ state_status_t state_lock(struct fsal_obj_handle *obj,
 	state_status_t status = 0;
 	fsal_openflags_t openflags;
 
+	/* XXX dang pin? */
+
 	/*
 	 * If we already have a read lock, and then get a write lock
 	 * request, we need to close the file that was already open for
@@ -2405,7 +2411,7 @@ state_status_t state_lock(struct fsal_obj_handle *obj,
 	else
 		openflags = FSAL_O_RDWR;
 
-	fsal_status = obj->obj_ops.open(obj, openflags);
+	fsal_status = fsal_open(obj, openflags);
 	if (FSAL_IS_ERROR(fsal_status)) {
 		status = state_error_convert(fsal_status);
 		LogFullDebug(COMPONENT_STATE, "Could not open file");
@@ -3245,7 +3251,8 @@ void state_nfs4_owner_unlock_all(state_owner_t *owner)
 
 		dec_state_t_ref(state);
 
-		/* Release the lru ref and export ref. */
+		/* Release the obj ref and export ref. */
+		obj->obj_ops.put_ref(obj);
 		put_gsh_export(export);
 	}
 
@@ -3309,6 +3316,12 @@ void state_export_unlock_all(void)
 		/* take a reference on the state_t */
 		inc_state_t_ref(state);
 
+		/* Get a reference to the cache inode while we still hold
+		 * the ssc_mutex (since we hold this mutex, any other function
+		 * that might be cleaning up this lock CAN NOT have released
+		 * the last LRU reference, thus it is safe to grab another. */
+		obj->obj_ops.get_ref(obj);
+
 		/* Get a reference to the owner */
 		inc_state_owner_ref(owner);
 
@@ -3338,6 +3351,7 @@ void state_export_unlock_all(void)
 		/* Release the refcounts we took above. */
 		dec_state_t_ref(state);
 		dec_state_owner_ref(owner);
+		obj->obj_ops.put_ref(obj);
 
 		if (!state_unlock_err_ok(status)) {
 			/* Increment the error count and try the next lock,

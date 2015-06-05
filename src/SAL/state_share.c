@@ -1024,6 +1024,12 @@ void state_export_unshare_all(void)
 		/* get a reference to the owner */
 		inc_state_owner_ref(owner);
 
+		/* Get a reference to the cache inode while we still hold
+		 * the export lock (since we hold this lock, any other function
+		 * that might be cleaning up this share CAN NOT have released
+		 * the last LRU reference, thus it is safe to grab another. */
+		obj->obj_ops.get_ref(obj);
+
 		/* Drop the export mutex to call unshare */
 		PTHREAD_RWLOCK_unlock(&op_ctx->export->lock);
 
@@ -1036,6 +1042,7 @@ void state_export_unshare_all(void)
 
 		/* Release references taken above. Should free the state_t. */
 		dec_state_owner_ref(owner);
+		obj->obj_ops.put_ref(obj);
 		dec_state_t_ref(state);
 
 		if (!state_unlock_err_ok(status)) {

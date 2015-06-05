@@ -263,10 +263,8 @@ int nfs4_op_layoutreturn(struct nfs_argop4 *op, compound_data_t *data,
 			if (layout_state->state_type != STATE_TYPE_LAYOUT)
 				continue;
 
-			if (!get_state_obj_export_owner_refs(layout_state,
-							       &obj,
-							       &export,
-							       NULL)) {
+			if (!get_state_obj_export_owner_refs(layout_state, &obj,
+							     &export, NULL)) {
 				/* This state is associated with a file or
 				 * export that is going stale, skip it (it
 				 * will be cleaned up as part of the stale
@@ -352,6 +350,11 @@ int nfs4_op_layoutreturn(struct nfs_argop4 *op, compound_data_t *data,
 	    ) {
 		/* Release the root op context we setup above */
 		release_root_op_context();
+	}
+
+	if (obj != NULL) {
+		/* Release object ref */
+		obj->obj_ops.put_ref(obj);
 	}
 
 	if (export != NULL) {

@@ -40,6 +40,7 @@
 
 #include <stdint.h>
 #include "sal_data.h"
+#include "fsal.h"
 
 /**
  * @brief Divisions in state and clientid tables.
@@ -105,6 +106,7 @@ static inline void state_hdl_init(struct state_hdl *ostate,
 				  struct fsal_obj_handle *obj)
 {
 	memset(ostate, 0, sizeof(*ostate));
+	pthread_rwlock_init(&ostate->state_lock, NULL);
 	switch (type) {
 	case REGULAR_FILE:
 		glist_init(&ostate->file.list_of_states);
@@ -673,7 +675,7 @@ void state_nfs4_owner_unlock_all(state_owner_t *owner);
 
 void state_export_unlock_all(void);
 
-void state_lock_wipe(struct fsal_obj_handle *obj);
+void state_lock_wipe(struct state_hdl *hstate);
 
 void cancel_all_nlm_blocked(void);
 
@@ -714,15 +716,25 @@ static inline struct fsal_obj_handle *get_state_obj_ref(state_t *state)
 	struct fsal_obj_handle *obj = NULL;
 	fsal_status_t fsal_status;
 	struct gsh_buffdesc fh_desc;
+	struct gsh_export *save_exp = op_ctx->export;
+	struct fsal_export *save_fsal = op_ctx->fsal_export;
 
 	if (state->state_export == NULL)
 		return NULL;
 
-	fh_desc.addr = &state->state_obj.digest;
+	/* Need to look up in the correct export */
+	op_ctx->export = state->state_export;
+	op_ctx->fsal_export = state->state_export->fsal_export;
+
+	fh_desc.addr = state->state_obj.digest;
 	fh_desc.len = state->state_obj.len;
 	fsal_status =
 	  state->state_export->fsal_export->exp_ops.create_handle(
 		state->state_export->fsal_export, &fh_desc, &obj);
+
+	op_ctx->export = save_exp;
+	op_ctx->fsal_export = save_fsal;
+
 	if (FSAL_IS_ERROR(fsal_status)) {
 		return NULL;
 	}
