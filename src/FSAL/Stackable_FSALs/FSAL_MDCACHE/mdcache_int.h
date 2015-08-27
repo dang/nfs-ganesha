@@ -47,6 +47,8 @@ struct mdcache_fsal_export {
 	struct fsal_export export;
 	struct fsal_export *sub_export;
 	char *name;
+	/** My up_ops */
+	struct fsal_up_vector up_ops;
 	/** The list of cache inode entries belonging to this export */
 	struct glist_head entry_list;
 	/** Lock protecting entry_list */

@@ -251,8 +251,8 @@ mdcache_invalidate(mdcache_entry_t *entry, uint32_t flags)
 	if (!(flags & MDCACHE_INVALIDATE_GOT_LOCK))
 		PTHREAD_RWLOCK_unlock(&entry->attr_lock);
 
-	if (((flags & MDCACHE_INVALIDATE_CLOSE) != 0)
-	    && (entry->obj_handle.type == REGULAR_FILE))
+	if ((flags & MDCACHE_INVALIDATE_CLOSE) &&
+	    (entry->obj_handle.type == REGULAR_FILE))
 		status = fsal_close(&entry->obj_handle);
 
 	/* Memory copying attributes with every call is expensive.

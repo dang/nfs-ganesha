@@ -23,6 +23,7 @@ SET(fsalmdcache_LIB_SRCS
 	mdcache_hash.c
 	mdcache_avl.c
 	mdcache_read_conf.c
+	mdcache_up.c
 	)
 
 add_library(fsalmdcache STATIC ${fsalmdcache_LIB_SRCS})

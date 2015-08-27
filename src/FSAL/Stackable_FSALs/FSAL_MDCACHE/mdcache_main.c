@@ -1,8 +1,8 @@
 /*
  * vim:noexpandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) CohortFS LLC, 2015
- * Author: Daniel Gryniewicz <dang@cohortfs.com>
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
+ * Author: Daniel Gryniewicz <dang@redhat.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,8 +21,14 @@
  *
  */
 
-/* main.c
- * Module core functions
+/**
+ * @addtogroup FSAL_MDCACHE
+ * @{
+ */
+
+/**
+ * @file  main.c
+ * @brief FSAL entry functions
  */
 
 #include "config.h"
@@ -156,10 +162,38 @@ mdcache_fsal_init_config(struct fsal_module *fsal_hdl,
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
-fsal_status_t mdcache_export_init(const struct fsal_up_vector *up_ops)
+/**
+ * @brief Enable caching for a FSAL export
+ *
+ * This is the API to call to enable caching on an export.  The sub-FSAL calls
+ * this with with the up_ops that were passed to it, and is wrapped in a
+ * FSAL_MDCACHE instance to do caching.  @ref op_ctx should already be
+ * initialized by the sub-FSAL.  On success, @a mdc_up_ops will contain
+ * the up_ops for the MDCACHE instance, that the sub-FSAL can the specialize.
+ *
+ * @see mdcache_fsal_create_export
+ *
+ * @param[in] super_up_ops	FSAL_UP ops for the super-FSAL
+ * @param[out] mdc_up_ops	FSAL_UP ops for MDCACHE
+ * @return FSAL status
+ */
+fsal_status_t mdcache_export_init(const struct fsal_up_vector *super_up_ops,
+				  struct fsal_up_vector **mdc_up_ops)
 {
-	return MDCACHE.fsal.m_ops.create_export(&MDCACHE.fsal, NULL, NULL,
-						up_ops);
+	struct mdcache_fsal_export *exp;
+	struct fsal_up_vector my_up_ops;
+	fsal_status_t status;
+
+	*mdc_up_ops = NULL;
+	mdcache_export_up_ops_init(&my_up_ops, super_up_ops);
+	status =  mdcache_init_export(&MDCACHE.fsal, &my_up_ops);
+	if (FSAL_IS_ERROR(status))
+		return status;
+
+	exp = mdc_cur_export();
+	*mdc_up_ops = &exp->up_ops;
+
+	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
 /* Internal MDCACHE method linkage to export object
@@ -293,3 +327,5 @@ void mdcache_dbus_show(DBusMessageIter *iter)
 	dbus_message_iter_close_container(iter, &struct_iter);
 }
 #endif /* USE_DBUS */
+
+/** @} */

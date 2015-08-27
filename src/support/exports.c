@@ -1584,7 +1584,6 @@ int init_export_root(struct gsh_export *export)
 	struct root_op_context root_op_context;
 	int my_status;
 
-	/* XXX dang no longer pinning, but keeping reference instead */
 	/* Initialize req_ctx */
 	init_root_op_context(&root_op_context, export, export->fsal_export,
 			     0, 0, UNKNOWN_REQUEST);

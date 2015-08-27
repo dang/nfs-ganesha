@@ -260,7 +260,9 @@ static nfsstat4 ds_write(struct fsal_ds_handle *const ds_pub,
 	int32_t amount_written = 0;
 	struct dswrite_arg warg;
 	unsigned int *fh;
+#if DFG_LATER
 	struct gsh_buffdesc key;
+#endif
 	int errsv = 0;
 
 	fh = (int *)&(gpfs_handle->f_handle);
@@ -294,14 +296,12 @@ static nfsstat4 ds_write(struct fsal_ds_handle *const ds_pub,
 	LogDebug(COMPONENT_PNFS, "write verifier %d-%d\n", warg.verifier4[0],
 		 warg.verifier4[1]);
 
+#if DFG_LATER
 	key.addr = gpfs_handle;
 	key.len = gpfs_handle->handle_key_size;
 	fsal_invalidate(req_ctx->fsal_export->fsal, &key,
-#if DFG_LATER
 			CACHE_INODE_INVALIDATE_ATTRS |
 			CACHE_INODE_INVALIDATE_CONTENT);
-#else
-	0);
 #endif
 
 	set_gpfs_verifier(writeverf);
@@ -352,7 +352,9 @@ static nfsstat4 ds_write_plus(struct fsal_ds_handle *const ds_pub,
 	int32_t amount_written = 0;
 	struct dswrite_arg warg;
 	unsigned int *fh;
+#if DFG_LATER
 	struct gsh_buffdesc key;
+#endif
 	int errsv = 0;
 
 	fh = (int *)&(gpfs_handle->f_handle);
@@ -389,14 +391,12 @@ static nfsstat4 ds_write_plus(struct fsal_ds_handle *const ds_pub,
 	LogDebug(COMPONENT_PNFS, "write verifier %d-%d\n",
 				warg.verifier4[0], warg.verifier4[1]);
 
+#if DFG_LATER
 	key.addr = gpfs_handle;
 	key.len = gpfs_handle->handle_key_size;
 	fsal_invalidate(req_ctx->fsal_export->fsal, &key,
-#if DFG_LATER
 			CACHE_INODE_INVALIDATE_ATTRS |
 			CACHE_INODE_INVALIDATE_CONTENT);
-#else
-	0);
 #endif
 
 	set_gpfs_verifier(writeverf);

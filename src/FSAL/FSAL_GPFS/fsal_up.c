@@ -52,6 +52,7 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 	uint32_t expire_time_attr = 0;
 	uint32_t upflags = 0;
 	int errsv = 0;
+	fsal_status_t fsal_status;
 
 #ifdef _VALGRIND_MEMCHECK
 		memset(&handle, 0, sizeof(handle));
@@ -189,16 +190,16 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 					.lock_length = fl.flock.l_len
 				};
 				if (reason == INODE_LOCK_AGAIN)
-					rc = up_async_lock_avail(general_fridge,
-							 event_func,
-							 gpfs_fs->fs->fsal,
+					fsal_status = up_async_lock_avail(
+							 general_fridge,
+							 event_func->export,
 							 &key,
 							 fl.lock_owner,
 							 &lockdesc, NULL, NULL);
 				else
-					rc = up_async_lock_grant(general_fridge,
-							 event_func,
-							 gpfs_fs->fs->fsal,
+					fsal_status = up_async_lock_grant(
+							 general_fridge,
+							 event_func->export,
 							 &key,
 							 fl.lock_owner,
 							 &lockdesc, NULL, NULL);
@@ -209,8 +210,8 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 			LogDebug(COMPONENT_FSAL_UP,
 				 "delegation recall: flags:%x ino %ld", flags,
 				 callback.buf->st_ino);
-			rc = up_async_delegrecall(general_fridge, event_func,
-						  gpfs_fs->fs->fsal,
+			fsal_status = up_async_delegrecall(general_fridge,
+						  event_func->export,
 						  &key, NULL, NULL);
 			break;
 
@@ -225,9 +226,9 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 					 "layout file recall: flags:%x ino %ld",
 					 flags, callback.buf->st_ino);
 
-				rc = up_async_layoutrecall(general_fridge,
-							event_func,
-							gpfs_fs->fs->fsal,
+				fsal_status = up_async_layoutrecall(
+							general_fridge,
+							event_func->export,
 							&key,
 							LAYOUT4_NFSV4_1_FILES,
 							false, &segment,
@@ -260,8 +261,8 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 			memset(&devid, 0, sizeof(devid));
 			devid.fsal_id = FSAL_ID_GPFS;
 
-			rc = up_async_notify_device(general_fridge,
-						event_func,
+			fsal_status = up_async_notify_device(general_fridge,
+						event_func->export,
 						NOTIFY_DEVICEID4_DELETE_MASK,
 						LAYOUT4_NFSV4_1_FILES,
 						&devid,
@@ -299,8 +300,8 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 				 * until this gets fixed!
 				 */
 				if (flags & (UP_SIZE | UP_SIZE_BIG)) {
-					rc = event_func->invalidate(
-						gpfs_fs->fs->fsal, &key,
+					fsal_status = event_func->invalidate(
+						event_func->export, &key,
 #if DFG_LATER
 						CACHE_INODE_INVALIDATE_ATTRS |
 						CACHE_INODE_INVALIDATE_CONTENT);
@@ -315,8 +316,8 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 				if (flags &
 				    ~(UP_SIZE | UP_NLINK | UP_MODE | UP_OWN |
 				     UP_TIMES | UP_ATIME | UP_SIZE_BIG)) {
-					rc = event_func->invalidate(
-						gpfs_fs->fs->fsal, &key,
+					fsal_status = event_func->invalidate(
+						event_func->export, &key,
 #if DFG_LATER
 						CACHE_INODE_INVALIDATE_ATTRS |
 						CACHE_INODE_INVALIDATE_CONTENT);
@@ -359,18 +360,17 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 					attr.expire_time_attr =
 					    expire_time_attr;
 
-					rc = event_func->
-					    update(gpfs_fs->fs->fsal,
+					fsal_status = event_func->
+					    update(event_func->export,
 						   &key, &attr, upflags);
 
 					if ((flags & UP_NLINK)
 					    && (attr.numlinks == 0)) {
 						upflags = fsal_up_nlink;
 						attr.mask = 0;
-						rc = up_async_update
+						fsal_status = up_async_update
 						    (general_fridge,
-						     event_func,
-						     gpfs_fs->fs->fsal,
+						     event_func->export,
 						     &key, &attr,
 						     upflags, NULL, NULL);
 					}
@@ -395,9 +395,8 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 #else
 			upflags = 0;
 #endif
-			rc = event_func->invalidate_close(
-						gpfs_fs->fs->fsal,
-						event_func,
+			fsal_status = event_func->invalidate_close(
+						event_func->export,
 						&key,
 						upflags);
 			break;
@@ -415,13 +414,13 @@ void *GPFSFSAL_UP_Thread(void *Arg)
 			continue;
 		}
 
-#if DFG_LATER
-		if (rc && rc != CACHE_INODE_NOT_FOUND) {
+		if (FSAL_IS_ERROR(fsal_status) &&
+		    fsal_status.major != ERR_FSAL_NOENT) {
 			LogWarn(COMPONENT_FSAL_UP,
-				"Event %d could not be processed for fd %d rc %d",
-				reason, gpfs_fs->root_fd, rc);
+				"Event %d could not be processed for fd %d rc %s",
+				reason, gpfs_fs->root_fd,
+				fsal_err_txt(fsal_status));
 		}
-#endif
 	}
 
 	return NULL;

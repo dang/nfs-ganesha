@@ -159,7 +159,8 @@ static fsal_status_t mdcache_alloc_and_check_handle(
  * @return FSAL status
  */
 static fsal_status_t mdcache_lookup(struct fsal_obj_handle *parent,
-			    const char *name, struct fsal_obj_handle **handle)
+				    const char *name,
+				    struct fsal_obj_handle **handle)
 {
 	mdcache_entry_t *mdc_parent =
 		container_of(parent, mdcache_entry_t, obj_handle);

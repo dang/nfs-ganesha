@@ -1,8 +1,8 @@
 /*
  * vim:noexpandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) CohortFS LLC, 2015
- * Author: Daniel Gryniewicz <dang@cohortfs.com>
+ * Copyright 2015 Red Hat, Inc. and/or its affiliates.
+ * Author: Daniel Gryniewicz <dang@redhat.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,8 +22,14 @@
  *
  */
 
-/* export.c
- * NULL FSAL export object
+/**
+ * @addtogroup FSAL_MDCACHE
+ * @{
+ */
+
+/**
+ * @file  main.c
+ * @brief FSAL export functions
  */
 
 #include "config.h"
@@ -558,7 +564,6 @@ void mdcache_export_ops_init(struct export_ops *ops)
 	ops->set_quota = mdcache_set_quota;
 }
 
-#if 0
 struct mdcache_fsal_args {
 	struct subfsal_args subfsal;
 };
@@ -585,7 +590,58 @@ static struct config_block export_param = {
 	.blk_desc.u.blk.params = export_params,
 	.blk_desc.u.blk.commit = noop_conf_commit
 };
+
+/**
+ * @brief Initialize a MDCACHE export
+ *
+ * Create a MDCACHE export, wrapping it around a sub-FSAL export.  The sub-FSAL
+ * export must be initialized already, as must @a mdc_up_ops
+ *
+ * @param[in] fsal_hdl		MDCACHE FSAL
+ * @param[in] mdc_up_ops	UP ops for MDCACHE
+ * @return FSAL status
+ */
+fsal_status_t
+mdcache_init_export(struct fsal_module *fsal_hdl,
+		    const struct fsal_up_vector *mdc_up_ops)
+{
+	struct mdcache_fsal_export *myself;
+	int namelen;
+	int retval;
+	pthread_rwlockattr_t attrs;
+
+	myself = gsh_calloc(1, sizeof(struct mdcache_fsal_export));
+	namelen = strlen(op_ctx->fsal_export->fsal->name) + 5;
+	myself->name = gsh_calloc(1, namelen);
+
+	myself->sub_export = op_ctx->fsal_export;
+	fsal_get(myself->sub_export->fsal);
+	snprintf(myself->name, namelen, "%s/MDC",
+		 myself->sub_export->fsal->name);
+
+	retval = fsal_export_init(&myself->export);
+	if (retval) {
+		gsh_free(myself);
+		return fsalstat(posix2fsal_error(retval), retval);
+	}
+	mdcache_export_ops_init(&myself->export.exp_ops);
+	myself->up_ops = *mdc_up_ops; /* Struct copy */
+	myself->up_ops.export = &myself->export;
+	myself->export.up_ops = &myself->up_ops;
+	myself->export.fsal = fsal_hdl;
+
+	glist_init(&myself->entry_list);
+	pthread_rwlockattr_init(&attrs);
+#ifdef GLIBC
+	pthread_rwlockattr_setkind_np(&attrs,
+		PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
 #endif
+	PTHREAD_RWLOCK_init(&myself->mdc_exp_lock, &attrs);
+
+	op_ctx->fsal_export = &myself->export;
+	op_ctx->fsal_module = fsal_hdl;
+	return fsalstat(ERR_FSAL_NO_ERROR, 0);
+}
 
 /**
  * @brief Create an export for MDCACHE
@@ -605,22 +661,18 @@ static struct config_block export_param = {
  * @param[in] up_ops		Upcall ops for export
  * @return FSAL status
  */
-
 fsal_status_t
 mdcache_fsal_create_export(struct fsal_module *fsal_hdl, void *parse_node,
 			   struct config_error_type *err_type,
-			   const struct fsal_up_vector *up_ops)
+			   const struct fsal_up_vector *super_up_ops)
 {
-	struct mdcache_fsal_export *myself;
-	int namelen;
-	int retval;
-	pthread_rwlockattr_t attrs;
-
-#if 0
 	fsal_status_t status = {0, 0};
-	struct fsal_module *fsal_stack;
+	struct fsal_module *sub_fsal;
 	struct mdcache_fsal_args mdcache_fsal;
-	/* process our FSAL block to get the name of the fsal
+	struct fsal_up_vector my_up_ops;
+	int retval;
+
+	/* process the sub-FSAL block to get the name of the fsal
 	 * underneath us.
 	 */
 	retval = load_config_from_node(parse_node,
@@ -630,54 +682,33 @@ mdcache_fsal_create_export(struct fsal_module *fsal_hdl, void *parse_node,
 				       err_type);
 	if (retval != 0)
 		return fsalstat(ERR_FSAL_INVAL, 0);
-	fsal_stack = lookup_fsal(mdcache_fsal.subfsal.name);
-	if (fsal_stack == NULL) {
+	sub_fsal = lookup_fsal(mdcache_fsal.subfsal.name);
+	if (sub_fsal == NULL) {
 		LogMajor(COMPONENT_FSAL, "failed to lookup for FSAL %s",
 			 mdcache_fsal.subfsal.name);
 		return fsalstat(ERR_FSAL_INVAL, EINVAL);
 	}
 
-	status = fsal_stack->m_ops.create_export(fsal_stack,
-						 mdcache_fsal.subfsal.fsal_node,
+	mdcache_export_up_ops_init(&my_up_ops, super_up_ops);
+
+	status = sub_fsal->m_ops.create_export(sub_fsal,
+						 parse_node,
 						 err_type,
-						 up_ops);
-	fsal_put(fsal_stack);
+						 &my_up_ops);
 	if (FSAL_IS_ERROR(status)) {
 		LogMajor(COMPONENT_FSAL,
 			 "Failed to call create_export on underlying FSAL %s",
 			 mdcache_fsal.subfsal.name);
-		gsh_free(myself);
+		fsal_put(sub_fsal);
 		return status;
 	}
 
-#endif
-	myself = gsh_calloc(1, sizeof(struct mdcache_fsal_export));
-	namelen = strlen(op_ctx->fsal_export->fsal->name) + 5;
-	myself->name = gsh_calloc(1, namelen);
+	/* Wrap sub export with MDCACHE export */
+	status = mdcache_init_export(fsal_hdl, &my_up_ops);
+	/* mdcache_init_export took a ref on sub_fsal */
+	fsal_put(sub_fsal);
 
-	myself->sub_export = op_ctx->fsal_export;
-	fsal_get(myself->sub_export->fsal);
-	snprintf(myself->name, namelen, "%s/MDC",
-		 myself->sub_export->fsal->name);
-
-	retval = fsal_export_init(&myself->export);
-	if (retval) {
-		gsh_free(myself);
-		return fsalstat(posix2fsal_error(retval), retval);
-	}
-	mdcache_export_ops_init(&myself->export.exp_ops);
-	myself->export.up_ops = up_ops;
-	myself->export.fsal = fsal_hdl;
-
-	glist_init(&myself->entry_list);
-	pthread_rwlockattr_init(&attrs);
-#ifdef GLIBC
-	pthread_rwlockattr_setkind_np(&attrs,
-		PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
-#endif
-	PTHREAD_RWLOCK_init(&myself->mdc_exp_lock, &attrs);
-
-	op_ctx->fsal_export = &myself->export;
-	op_ctx->fsal_module = fsal_hdl;
-	return fsalstat(ERR_FSAL_NO_ERROR, 0);
+	return status;
 }
+
+/** @} */
