@@ -1533,17 +1533,17 @@ void exports_pkginit(void)
 }
 
 /**
- * @brief Return a reference to the root cache inode entry of the export
+ * @brief Return a reference to the root object of the export
  *
  * Must be called with the caller holding a reference to the export.
  *
- * Returns with an additional reference to the cache inode held for use by the
+ * Returns with an additional reference to the obj held for use by the
  * caller.
  *
  * @param export [IN] the aforementioned export
- * @param entry  [IN/OUT] call by ref pointer to store cache entry
+ * @param entry  [IN/OUT] call by ref pointer to store obj
  *
- * @return cache inode status code
+ * @return FSAL status
  */
 
 fsal_status_t nfs_export_get_root_entry(struct gsh_export *export,

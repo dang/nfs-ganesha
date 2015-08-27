@@ -54,8 +54,8 @@ int _9p_walk(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 	u16 *wnames_len;
 	char *wnames_str;
 	uint64_t fileid;
-	cache_inode_status_t cache_status;
-	cache_entry_t *pentry = NULL;
+	fsal_status_t fsal_status;
+	struct fsal_obj_handle *pentry = NULL;
 	char name[MAXNAMLEN];
 
 	u16 *nwqid;
@@ -104,7 +104,7 @@ int _9p_walk(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 		pnewfid->fid = *newfid;
 
 		/* Increments refcount */
-		(void) cache_inode_lru_ref(pnewfid->pentry, LRU_REQ_STALE_OK);
+		pnewfid->pentry->obj_ops.get_ref(pnewfid->pentry);
 	} else {
 		/* the walk is in fact a lookup */
 		pentry = pfid->pentry;
@@ -123,18 +123,16 @@ int _9p_walk(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 				pnewfid->pentry = NULL;
 
 			/* refcount +1 */
-			cache_status =
-			    cache_inode_lookup(pentry, name, &pnewfid->pentry);
-
-			if (pnewfid->pentry == NULL) {
+			fsal_status = fsal_lookup(pentry, name, &pnewfid->pentry);
+			if (FSAL_IS_ERROR(fsal_status)) {
 				gsh_free(pnewfid);
 				return _9p_rerror(req9p, msgtag,
-						  _9p_tools_errno(cache_status),
+						  _9p_tools_errno(fsal_status),
 						  plenout, preply);
 			}
 
 			if (pentry != pfid->pentry)
-				cache_inode_put(pentry);
+				pentry->obj_ops.put_ref(pentry);
 
 			pentry = pnewfid->pentry;
 		}
@@ -153,7 +151,7 @@ int _9p_walk(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 		pnewfid->export = pfid->export;
 		pnewfid->ucred = pfid->ucred;
 
-		fileid = cache_inode_fileid(pnewfid->pentry);
+		fileid = fsal_fileid(pnewfid->pentry);
 
 		/* Build the qid */
 		/* No cache, we want the client to stay synchronous
@@ -218,10 +216,9 @@ int _9p_walk(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 	_9p_checkbound(cursor, preply, plenout);
 
 	LogDebug(COMPONENT_9P,
-		 "RWALK: tag=%u fid=%u newfid=%u nwqid=%u fileid=%llu pentry=%p refcount=%i",
+		 "RWALK: tag=%u fid=%u newfid=%u nwqid=%u fileid=%llu pentry=%p",
 		 (u32) *msgtag, *fid, *newfid, *nwqid,
-		 (unsigned long long)pnewfid->qid.path, pnewfid->pentry,
-		 pnewfid->pentry->lru.refcnt);
+		 (unsigned long long)pnewfid->qid.path, pnewfid->pentry);
 
 	return 1;
 }

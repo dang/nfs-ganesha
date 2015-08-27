@@ -59,10 +59,10 @@ int _9p_lcreate(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 	struct _9p_qid qid_newfile;
 	u32 iounit = _9P_IOUNIT;
 
-	cache_entry_t *pentry_newfile = NULL;
+	struct fsal_obj_handle *pentry_newfile = NULL;
 	char file_name[MAXNAMLEN];
 	int64_t fileid;
-	cache_inode_status_t cache_status;
+	fsal_status_t fsal_status;
 	fsal_openflags_t openflags = 0;
 
 	/* Get data */
@@ -101,37 +101,29 @@ int _9p_lcreate(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 
 	/* BUGAZOMEU: @todo : the gid parameter is not used yet,
 	 * flags is not yet used */
-	cache_status =
-	    cache_inode_create(pfid->pentry, file_name, REGULAR_FILE, *mode,
-			       NULL, &pentry_newfile);
-	if (pentry_newfile == NULL)
-		return _9p_rerror(req9p, msgtag,
-				  _9p_tools_errno(cache_status), plenout,
-				  preply);
+	fsal_status = fsal_create(pfid->pentry, file_name, REGULAR_FILE, *mode,
+				  NULL, &pentry_newfile);
+	if (FSAL_IS_ERROR(fsal_status))
+		return _9p_rerror(req9p, msgtag, _9p_tools_errno(fsal_status),
+				  plenout, preply);
 
-	fileid = cache_inode_fileid(pentry_newfile);
+	fileid = fsal_fileid(pentry_newfile);
 
 	_9p_openflags2FSAL(flags, &openflags);
 	pfid->state.state_data.fid.share_access =
 		_9p_openflags_to_share_access(flags);
 
-	cache_status = cache_inode_open(pentry_newfile, openflags, 0);
-	if (cache_status != CACHE_INODE_SUCCESS) {
-		return _9p_rerror(req9p, msgtag,
-				  _9p_tools_errno(cache_status),
+	fsal_status = fsal_open(pentry_newfile, openflags);
+	if (FSAL_IS_ERROR(fsal_status)) {
+		return _9p_rerror(req9p, msgtag, _9p_tools_errno(fsal_status),
 				  plenout, preply);
 	}
 
-	/* Pin as well. We probably want to close the file if this fails,
-	 * but it won't happen - right?! */
-	cache_status = cache_inode_inc_pin_ref(pentry_newfile);
-	if (cache_status != CACHE_INODE_SUCCESS)
-		return _9p_rerror(req9p, msgtag,
-				  _9p_tools_errno(cache_status), plenout,
-				  preply);
+	/* Get the open ref */
+	pentry_newfile->obj_ops.get_ref(pentry_newfile);
 
 	/* put parent directory entry */
-	cache_inode_put(pfid->pentry);
+	pfid->pentry->obj_ops.put_ref(pfid->pentry);
 
 	/* Build the qid */
 	qid_newfile.type = _9P_QTFILE;

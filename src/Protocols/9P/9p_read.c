@@ -59,7 +59,7 @@ int _9p_read(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 
 	size_t read_size = 0;
 	bool eof_met;
-	cache_inode_status_t cache_status = CACHE_INODE_SUCCESS;
+	fsal_status_t fsal_status;
 	/* uint64_t stable_flag = CACHE_INODE_SAFE_WRITE_TO_FS; */
 	bool sync = false;
 
@@ -105,10 +105,9 @@ int _9p_read(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 
 		outcount = (u32) *count;
 	} else {
-		cache_status = cache_inode_rdwr(pfid->pentry, CACHE_INODE_READ,
-						*offset, *count, &read_size,
-						databuffer, &eof_met, &sync,
-						NULL);
+		fsal_status = fsal_rdwr(pfid->pentry, FSAL_IO_READ, *offset,
+					*count, &read_size, databuffer,
+					&eof_met, &sync, NULL);
 
 		/* Get the handle, for stats */
 		struct gsh_client *client = req9p->pconn->client;
@@ -119,17 +118,13 @@ int _9p_read(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 		} else {
 			op_ctx->client = client;
 
-			server_stats_io_done(*count,
-					     read_size,
-					     (cache_status ==
-					      CACHE_INODE_SUCCESS) ?
-					      true : false,
-					     false);
+			server_stats_io_done(*count, read_size,
+					     FSAL_IS_ERROR(fsal_status), false);
 		}
 
-		if (cache_status != CACHE_INODE_SUCCESS)
+		if (FSAL_IS_ERROR(fsal_status))
 			return _9p_rerror(req9p, msgtag,
-					  _9p_tools_errno(cache_status),
+					  _9p_tools_errno(fsal_status),
 					  plenout, preply);
 
 		outcount = (u32) read_size;

@@ -277,6 +277,35 @@ static fsal_status_t fsal_check_setattr_perms(struct fsal_obj_handle *obj,
 }
 
 /**
+ * @brief Gets the fileid of an object
+ *
+ * @param[in]  obj   Object to be managed.
+ *
+ * @return The fileid
+ *
+ */
+uint64_t fsal_fileid(struct fsal_obj_handle *obj)
+{
+	uint64_t fileid;
+
+	PTHREAD_RWLOCK_rdlock(&op_ctx->export->lock);
+
+	if (obj == op_ctx->export->exp_root_obj) {
+
+		fileid = op_ctx->export->exp_mounted_on_file_id;
+
+		PTHREAD_RWLOCK_unlock(&op_ctx->export->lock);
+	} else {
+		PTHREAD_RWLOCK_unlock(&op_ctx->export->lock);
+
+		/* No need to lock the attrs, fileid doesn't change. */
+		fileid = obj->attrs->fileid;
+	}
+
+	return fileid;
+}
+
+/**
  * @brief Checks permissions on an entry for setattrs
  *
  * This function checks if the supplied credentials are sufficient to perform
@@ -731,6 +760,8 @@ fsal_status_t fsal_lookupp(struct fsal_obj_handle *obj,
  * @param[in]  mode       Mode to be used at file creation
  * @param[in]  create_arg Additional argument for object creation
  * @param[out] obj        Created file
+ *
+ * @note On success, @a obj has been ref'd
  *
  * @return FSAL status
  */

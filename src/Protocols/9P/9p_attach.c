@@ -63,10 +63,9 @@ int _9p_attach(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 	struct _9p_fid *pfid = NULL;
 
 	struct gsh_export *export = NULL;
-	cache_inode_status_t cache_status;
 	fsal_status_t fsal_status;
 	char exppath[MAXPATHLEN];
-	cache_inode_fsal_data_t fsal_data;
+	struct gsh_buffdesc fh_desc;
 	struct fsal_obj_handle *pfsal_handle;
 	int port;
 
@@ -162,37 +161,35 @@ int _9p_attach(struct _9p_request_data *req9p, u32 *plenout, char *preply)
 
 	if (exppath[0] != '/' ||
 	    !strcmp(exppath, export->fullpath)) {
-		/* Check if root cache entry is correctly set, fetch it, and
-		 * take an LRU reference.
+		/* Check if root objest is correctly set, fetch it, and take an
+		 * LRU reference.
 		 */
-		/*cache_status = nfs_export_get_root_entry(export, &pfid->pentry);*/
-		/*if (cache_status != CACHE_INODE_SUCCESS) {*/
-			/*err = _9p_tools_errno(cache_status);*/
+		fsal_status = nfs_export_get_root_entry(export, &pfid->pentry);
+		if (FSAL_IS_ERROR(fsal_status)) {
+			err = _9p_tools_errno(fsal_status);
 			goto errout;
-		/*}*/
+		}
 	} else {
 		fsal_status = op_ctx->fsal_export->exp_ops.lookup_path(
 						op_ctx->fsal_export,
 						exppath,
 						&pfsal_handle);
 		if (FSAL_IS_ERROR(fsal_status)) {
-			err = _9p_tools_errno(
-				cache_inode_error_convert(fsal_status));
+			err = _9p_tools_errno(fsal_status);
 			goto errout;
 		}
 
 		pfsal_handle->obj_ops.handle_to_key(pfsal_handle,
-						 &fsal_data.fh_desc);
-		fsal_data.export = export->fsal_export;
-
-		cache_status = cache_inode_get(&fsal_data, &pfid->pentry);
-		if (cache_status != CACHE_INODE_SUCCESS) {
-			err = _9p_tools_errno(cache_status);
+						 &fh_desc);
+		fsal_status = export->fsal_export->exp_ops.create_handle(
+				 export->fsal_export, &fh_desc, &pfid->pentry);
+		if (FSAL_IS_ERROR(fsal_status)) {
+			err = _9p_tools_errno(fsal_status);
 			goto errout;
 		}
 	}
 
-	fileid = cache_inode_fileid(pfid->pentry);
+	fileid = fsal_fileid(pfid->pentry);
 
 	/* Compute the qid */
 	pfid->qid.type = _9P_QTDIR;
@@ -223,7 +220,7 @@ errout:
 
 	if (pfid != NULL) {
 		if (pfid->pentry != NULL)
-			cache_inode_put(pfid->pentry);
+			pfid->pentry->obj_ops.put_ref(pfid->pentry);
 		if (pfid->ucred != NULL)
 			release_9p_user_cred_ref(pfid->ucred);
 
