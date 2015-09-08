@@ -92,8 +92,17 @@ void state_release_export(struct gsh_export *exp);
 
 bool state_unlock_err_ok(state_status_t status);
 
+/**
+ * @brief Initialize a state handle
+ *
+ * @param[in,out] ostate	State handle to initialize
+ * @param[in] type	Type of handle
+ * @param[in] obj	Object owning handle
+ * @return Return description
+ */
 static inline void state_hdl_init(struct state_hdl *ostate,
-				  object_file_type_t type)
+				  object_file_type_t type,
+				  struct fsal_obj_handle *obj)
 {
 	memset(ostate, 0, sizeof(*ostate));
 	switch (type) {
@@ -102,6 +111,7 @@ static inline void state_hdl_init(struct state_hdl *ostate,
 		glist_init(&ostate->file.layoutrecall_list);
 		glist_init(&ostate->file.lock_list);
 		glist_init(&ostate->file.nlm_share_list);
+		ostate->file.obj = obj;
 		break;
 	case DIRECTORY:
 		glist_init(&ostate->dir.export_roots);
