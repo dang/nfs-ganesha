@@ -79,27 +79,8 @@ static fsal_status_t invalidate_close(struct fsal_export *export,
 				      struct gsh_buffdesc *handle,
 				      uint32_t flags)
 {
-#if 0
-	cache_entry_t *entry = NULL;
-	cache_inode_status_t rc = 0;
-
-	rc = up_get(export, handle, &entry);
-	if (rc == 0) {
-		if (is_open(entry))
-			rc = up_async_invalidate(general_fridge, up_ops, fsal,
-						 handle,
-						 CACHE_INODE_INVALIDATE_CLOSE,
-						 NULL, NULL);
-		else
-			(void) cache_inode_invalidate(entry, flags);
-		cache_inode_put(entry);
-	}
-
-	return rc;
-#else
 	/* No need to invalidate with no cache */
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
-#endif
 }
 
 fsal_status_t fsal_invalidate(struct fsal_export *export,
