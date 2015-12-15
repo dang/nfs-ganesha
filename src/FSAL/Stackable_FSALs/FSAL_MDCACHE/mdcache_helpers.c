@@ -144,7 +144,7 @@ void mdc_clean_mapping(mdcache_entry_t *entry)
  *
  */
 
-static fsal_status_t
+static void
 mdc_check_mapping(mdcache_entry_t *entry)
 {
 	struct mdcache_fsal_export *export = mdc_cur_export();

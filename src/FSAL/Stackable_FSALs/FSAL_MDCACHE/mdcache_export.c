@@ -602,12 +602,11 @@ static struct config_block export_param = {
  * @return FSAL status
  */
 fsal_status_t
-mdcache_init_export(struct fsal_module *fsal_hdl,
+mdc_init_export(struct fsal_module *fsal_hdl,
 		    const struct fsal_up_vector *mdc_up_ops)
 {
 	struct mdcache_fsal_export *myself;
 	int namelen;
-	int retval;
 	pthread_rwlockattr_t attrs;
 
 	myself = gsh_calloc(1, sizeof(struct mdcache_fsal_export));
@@ -619,11 +618,7 @@ mdcache_init_export(struct fsal_module *fsal_hdl,
 	snprintf(myself->name, namelen, "%s/MDC",
 		 myself->sub_export->fsal->name);
 
-	retval = fsal_export_init(&myself->export);
-	if (retval) {
-		gsh_free(myself);
-		return fsalstat(posix2fsal_error(retval), retval);
-	}
+	fsal_export_init(&myself->export);
 	mdcache_export_ops_init(&myself->export.exp_ops);
 	myself->up_ops = *mdc_up_ops; /* Struct copy */
 	myself->up_ops.export = &myself->export;
@@ -704,8 +699,8 @@ mdcache_fsal_create_export(struct fsal_module *fsal_hdl, void *parse_node,
 	}
 
 	/* Wrap sub export with MDCACHE export */
-	status = mdcache_init_export(fsal_hdl, &my_up_ops);
-	/* mdcache_init_export took a ref on sub_fsal */
+	status = mdc_init_export(fsal_hdl, &my_up_ops);
+	/* mdc_init_export took a ref on sub_fsal */
 	fsal_put(sub_fsal);
 
 	return status;

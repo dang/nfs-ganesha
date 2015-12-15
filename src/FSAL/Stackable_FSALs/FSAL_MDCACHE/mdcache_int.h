@@ -399,7 +399,7 @@ typedef struct {
  *
  * @return 0 on success.
  */
-static inline
+static inline void
 mdcache_key_dup(mdcache_key_t *tgt,
 		    mdcache_key_t *src)
 {
@@ -621,8 +621,8 @@ fsal_status_t mdcache_remove_extattr_by_name(struct fsal_obj_handle *obj_hdl,
 void mdcache_handle_ops_init(struct fsal_obj_ops *ops);
 
 /* Export functions */
-fsal_status_t mdcache_init_export(struct fsal_module *fsal_hdl,
-				  const struct fsal_up_vector *mdc_up_ops);
+fsal_status_t mdc_init_export(struct fsal_module *fsal_hdl,
+			      const struct fsal_up_vector *mdc_up_ops);
 
 /* Upcall functions */
 fsal_status_t mdcache_export_up_ops_init(struct fsal_up_vector *my_up_ops,

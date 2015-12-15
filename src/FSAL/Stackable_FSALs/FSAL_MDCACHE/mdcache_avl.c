@@ -250,13 +250,13 @@ mdcache_avl_qp_insert(mdcache_entry_t *entry, mdcache_dir_entry_t *v)
 			return code;
 		/* detect name conflict */
 		if (j == 0) {
-			cache_inode_dir_entry_t *v2 =
-				cache_inode_avl_lookup_k(entry, v->hk.k,
-						  CACHE_INODE_FLAG_ONLY_ACTIVE);
+			mdcache_dir_entry_t *v2 =
+				mdcache_avl_lookup_k(entry, v->hk.k,
+						  MDCACHE_FLAG_ONLY_ACTIVE);
 			assert(v != v2);
 			if (v2 && (strcmp(v->name, v2->name) == 0)) {
 				LogCrit(COMPONENT_CACHE_INODE,
-					"cache_inode_avl_qp_insert_s: name conflict (%s, %s)",
+					"name conflict (%s, %s)",
 					v->name, v2->name);
 				return -2;
 			}
