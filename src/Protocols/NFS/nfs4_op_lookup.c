@@ -111,6 +111,8 @@ int nfs4_op_lookup(struct nfs_argop4 *op, compound_data_t *data,
 
 	if (file_obj->type == DIRECTORY) {
 		PTHREAD_RWLOCK_rdlock(&file_obj->state->state_lock);
+		LogDebug(COMPONENT_NFS_V4, "obj=%p state=%p",
+			 file_obj, file_obj->state);
 
 		if (file_obj->state->dir.junction_export != NULL) {
 			/* Handle junction */

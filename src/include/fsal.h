@@ -331,7 +331,7 @@ fsal_status_t fsal_readdir(struct fsal_obj_handle *directory, uint64_t cookie,
 			   attrmask_t attrmask, fsal_getattr_cb_t cb,
 			   void *opaque);
 fsal_status_t fsal_remove(struct fsal_obj_handle *parent, const char *name);
-nfsstat4 fsal_rename(struct fsal_obj_handle *dir_src,
+fsal_status_t fsal_rename(struct fsal_obj_handle *dir_src,
 			  const char *oldname,
 			  struct fsal_obj_handle *dir_dest,
 			  const char *newname);

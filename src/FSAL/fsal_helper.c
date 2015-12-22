@@ -60,6 +60,13 @@
 
 size_t open_fd_count = 0;
 
+/* XXX dang locking
+ * - FD locking (open, close, is_open) - was content lock
+ * - Attributes
+ *   	- ->attrs probably fine
+ *   	- ->attrs->acl is not safe (was attr_lock)
+ */
+
 
 bool fsal_is_open(struct fsal_obj_handle *obj)
 {
@@ -287,7 +294,7 @@ fsal_status_t fsal_refresh_attrs(struct fsal_obj_handle *obj)
 	if (obj->attrs->acl) {
 		fsal_acl_status_t acl_status = 0;
 
-		nfs4_acl_release_entry(obj->attrs->acl, &acl_status);
+		acl_status = nfs4_acl_release_entry(obj->attrs->acl);
 		if (acl_status != NFS_V4_ACL_SUCCESS) {
 			LogEvent(COMPONENT_FSAL,
 				 "Failed to release old acl, status=%d",
@@ -429,7 +436,7 @@ fsal_status_t fsal_setattr(struct fsal_obj_handle *obj, struct attrlist *attr)
 	if (before == obj->attrs->change)
 		obj->attrs->change++;
 	/* Decrement refcount on saved ACL */
-	nfs4_acl_release_entry(saved_acl, &acl_status);
+	acl_status = nfs4_acl_release_entry(saved_acl);
 	if (acl_status != NFS_V4_ACL_SUCCESS)
 		LogCrit(COMPONENT_FSAL,
 			"Failed to release old acl, status=%d", acl_status);
@@ -617,6 +624,10 @@ fsal_status_t fsal_link(struct fsal_obj_handle *obj,
 	/* Rather than performing a lookup first, just try to make the
 	   link and return the FSAL's error if it fails. */
 	status = obj->obj_ops.link(obj, dest_dir, name);
+	if (FSAL_IS_ERROR(status))
+		return status;
+
+	status = fsal_refresh_attrs(obj);
 	if (FSAL_IS_ERROR(status))
 		return status;
 
@@ -932,8 +943,6 @@ fsal_status_t fsal_rdwr(struct fsal_obj_handle *obj,
 		goto out;
 	}
 
-	/* XXX dang cache_inode takes content lock here.  Why?
-	 * Will likely fall out from state/FD work */
 	loflags = obj->obj_ops.status(obj);
 	while ((!fsal_is_open(obj))
 	       || (loflags && loflags != FSAL_O_RDWR && loflags != openflags)) {
@@ -1008,7 +1017,6 @@ fsal_status_t fsal_rdwr(struct fsal_obj_handle *obj,
 				     "fsal_rdwr_plus: CLOSING file %p",
 				     obj);
 
-			/* XXX dang content lock here */
 			fsal_status = obj->obj_ops.close(obj);
 			if (FSAL_IS_ERROR(fsal_status)) {
 				LogCrit(COMPONENT_FSAL,
@@ -1026,7 +1034,6 @@ fsal_status_t fsal_rdwr(struct fsal_obj_handle *obj,
 		     offset);
 
 	if (opened) {
-		// XXX dang content lock here
 		fsal_status = obj->obj_ops.close(obj);
 		if (FSAL_IS_ERROR(fsal_status)) {
 			LogEvent(COMPONENT_FSAL,
@@ -1036,14 +1043,12 @@ fsal_status_t fsal_rdwr(struct fsal_obj_handle *obj,
 		}
 	}
 
-	// XXX dang attribute lock here
 	if (io_direction == FSAL_IO_WRITE ||
 	    io_direction == FSAL_IO_WRITE_PLUS) {
 		fsal_status = fsal_refresh_attrs(obj);
 		if (FSAL_IS_ERROR(fsal_status))
 			goto out;
 	}
-	// XXX dang set atime
 
 	fsal_status = fsalstat(0, 0);
 
@@ -1082,30 +1087,14 @@ get_dirent(struct fsal_obj_handle *obj, struct fsal_readdir_cb_parms *cb_parms,
 }
 
 static bool
-populate_dirent(const char *name, void *dir_state, fsal_cookie_t cookie)
+populate_dirent(const char *name, struct fsal_obj_handle *obj, void *dir_state,
+		fsal_cookie_t cookie)
 {
 	struct fsal_populate_cb_state *state =
 	    (struct fsal_populate_cb_state *)dir_state;
-	struct fsal_obj_handle *obj = state->directory;
 	struct fsal_readdir_cb_parms cb_parms = { state->opaque, name,
 		true, 0, true };
 	fsal_status_t status = { 0, 0 };
-
-	status = obj->obj_ops.lookup(obj, name, &obj);
-	if (FSAL_IS_ERROR(status)) {
-		*state->status = status;
-		if (status.major == ERR_FSAL_XDEV) {
-			LogInfo(COMPONENT_NFS_READDIR,
-				"Ignoring XDEV entry %s",
-				name);
-			*state->status = fsalstat(0, 0);
-			return true;
-		}
-		LogInfo(COMPONENT_FSAL,
-			"Lookup failed on %s in dir %p with %s",
-			name, obj, fsal_err_txt(status));
-		return false;
-	}
 
 	status = get_dirent(obj, &cb_parms, cookie, state);
 	if (status.major == ERR_FSAL_CROSS_JUNCTION) {
@@ -1388,10 +1377,9 @@ out:
  * @param[in] dir_dest The destination directory
  * @param[in] newname  The name to be assigned to the object
  *
- * @return NFS4 error code
+ * @return FSAL status
  */
-/* XXX dang convert all nfsstat4 to fsal_status_t */
-nfsstat4 fsal_rename(struct fsal_obj_handle *dir_src,
+fsal_status_t fsal_rename(struct fsal_obj_handle *dir_src,
 			  const char *oldname,
 			  struct fsal_obj_handle *dir_dest,
 			  const char *newname)
@@ -1401,13 +1389,13 @@ nfsstat4 fsal_rename(struct fsal_obj_handle *dir_src,
 	struct fsal_obj_handle *lookup_dst = NULL;
 
 	if ((dir_src->type != DIRECTORY) || (dir_dest->type != DIRECTORY)) {
-		return NFS4ERR_NOTDIR;
+		return fsalstat(ERR_FSAL_NOTDIR, 0);
 	}
 
 	/* Check for . and .. on oldname and newname. */
 	if (!strcmp(oldname, ".") || !strcmp(oldname, "..")
 	    || !strcmp(newname, ".") || !strcmp(newname, "..")) {
-		return NFS4ERR_BADNAME;
+		return fsalstat(ERR_FSAL_BADNAME, 0);
 	}
 
 	/* Check for object existence in source directory */
@@ -1417,7 +1405,7 @@ nfsstat4 fsal_rename(struct fsal_obj_handle *dir_src,
 		LogDebug(COMPONENT_FSAL,
 			 "Rename (%p,%s)->(%p,%s) : source doesn't exist",
 			 dir_src, oldname, dir_dest, newname);
-		return nfs4_Errno_status(fsal_status);
+		return fsal_status;
 	}
 
 	/* Do not rename a junction node or an export root. */
@@ -1431,7 +1419,7 @@ nfsstat4 fsal_rename(struct fsal_obj_handle *dir_src,
 			PTHREAD_RWLOCK_unlock(&lookup_src->state->state_lock);
 			LogCrit(COMPONENT_FSAL, "Attempt to rename export %s",
 				oldname);
-			return NFS4ERR_NOTEMPTY;
+			return fsalstat(ERR_FSAL_NOTEMPTY, 0);
 		}
 		PTHREAD_RWLOCK_unlock(&lookup_src->state->state_lock);
 	}
@@ -1451,11 +1439,11 @@ nfsstat4 fsal_rename(struct fsal_obj_handle *dir_src,
 			LogDebug(COMPONENT_FSAL,
 				 "Rename (%p,%s)->(%p,%s) : same file so skipping out",
 				 dir_src, oldname, dir_dest, newname);
-			return nfs4_Errno_status(fsal_status);
+			return fsal_status;
 		}
 	} else if (fsal_status.major != ERR_FSAL_NOENT) {
 		/* Anything other than not-found is error */
-		return nfs4_Errno_status(fsal_status);
+		return fsal_status;
 	}
 
 	LogFullDebug(COMPONENT_FSAL, "about to call FSAL rename");
@@ -1471,17 +1459,17 @@ nfsstat4 fsal_rename(struct fsal_obj_handle *dir_src,
 			     "FSAL rename failed with %s",
 			     fsal_err_txt(fsal_status));
 
-		return nfs4_Errno_status(fsal_status);
+		return fsal_status;
 	}
 
 	if (lookup_dst) {
 		fsal_status = fsal_refresh_attrs(lookup_dst);
 		if (FSAL_IS_ERROR(fsal_status) &&
 		    fsal_status.major != ERR_FSAL_STALE)
-			return nfs4_Errno_status(fsal_status);
+			return fsal_status;
 	}
 
-	return NFS4_OK;
+	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
 /**
@@ -1502,7 +1490,6 @@ fsal_status_t fsal_open(struct fsal_obj_handle *obj_hdl,
 
 	current_flags = obj_hdl->obj_ops.status(obj_hdl);
 
-	/* XXX dang revisit locking */
 	/* Filter out overloaded FSAL_O_RECLAIM */
 	openflags &= ~FSAL_O_RECLAIM;
 
@@ -1562,12 +1549,8 @@ fsal_status_t fsal_close(struct fsal_obj_handle *obj_hdl)
 		return fsalstat(ERR_FSAL_BADTYPE, 0);
 	}
 
-	// XXX dang content lock
-
 	if (!fsal_is_open(obj_hdl))
 		return fsalstat(ERR_FSAL_NO_ERROR, 0);
-
-	// XXX dang deal with pinning
 
 	return obj_hdl->obj_ops.close(obj_hdl);
 }
@@ -1761,6 +1744,9 @@ cache_inode_errors_convert(fsal_errors_t fsal_errors)
 
 	case ERR_FSAL_BAD_RANGE:
 		return CACHE_INODE_BAD_RANGE;
+
+	case ERR_FSAL_BADNAME:
+		return CACHE_INODE_BADNAME;
 
 	case ERR_FSAL_BLOCKED:
 	case ERR_FSAL_INTERRUPT:

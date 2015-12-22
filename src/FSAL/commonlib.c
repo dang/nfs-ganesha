@@ -342,6 +342,8 @@ const char *msg_fsal_err(fsal_errors_t fsal_err)
 		return "Lock not in allowable range";
 	case ERR_FSAL_CROSS_JUNCTION:
 		return "Crossed Junction";
+	case ERR_FSAL_BADNAME:
+		return "Invalid Name";
 	}
 
 	return "Unknown FSAL error";

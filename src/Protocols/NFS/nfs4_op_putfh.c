@@ -140,8 +140,10 @@ static int nfs4_mds_putfh(compound_data_t *data)
 	fsal_status_t fsal_status = { 0, 0 };
 	bool changed = true;
 
-	LogFullDebug(COMPONENT_FILEHANDLE, "NFS4 Handle 0x%X export id %d",
+	LogFullDebug(COMPONENT_FILEHANDLE, "NFS4 Handle flags 0x%X export id %d",
 		v4_handle->fhflags1, v4_handle->id.exports);
+	LogFullDebugOpaque(COMPONENT_FILEHANDLE, "NFS4 FSAL Handle %s", LEN_FH_STR,
+			   v4_handle->fsopaque, v4_handle->fs_len);
 
 	/* Find any existing export by the "id" from the handle,
 	 * before releasing the old export (to prevent thrashing).

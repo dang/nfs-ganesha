@@ -112,7 +112,8 @@ int nfs4_op_rename(struct nfs_argop4 *op, compound_data_t *data,
 	res_RENAME4->RENAME4res_u.resok4.target_cinfo.before =
 	    fsal_get_changeid4(dst_obj);
 
-	status = fsal_rename(src_obj, oldname, dst_obj, newname);
+	status = nfs4_Errno_status(fsal_rename(src_obj, oldname, dst_obj,
+					       newname));
 
 	if (status != NFS4_OK) {
 		res_RENAME4->status = status;

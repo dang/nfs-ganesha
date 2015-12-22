@@ -390,6 +390,7 @@ state_status_t state_error_convert(fsal_status_t fsal_status)
 	case ERR_FSAL_NO_DATA:
 	case ERR_FSAL_NO_ACE:
 	case ERR_FSAL_CROSS_JUNCTION:
+	case ERR_FSAL_BADNAME:
 		/* These errors should be handled inside state
 		 * (or should never be seen by state)
 		 */

@@ -250,11 +250,12 @@ retry:
 	}
 
 	LogDebug(COMPONENT_EXPORT,
-		 "BUILDING PSEUDOFS: Export_Id %d Path %s Pseudo Path %s CREATE %s succeded",
+		 "BUILDING PSEUDOFS: Export_Id %d Path %s Pseudo Path %s CREATE %s obj %p state %p succeded",
 		 state->export->export_id,
 		 state->export->fullpath,
 		 state->export->pseudopath,
-		 name);
+		 name,
+		 new_node, new_node->state);
 
 	/* Make new node the current node */
 	state->obj = new_node;
@@ -415,6 +416,13 @@ bool pseudo_mount_export(struct gsh_export *export)
 	PTHREAD_RWLOCK_unlock(&op_ctx->export->lock);
 
 	PTHREAD_RWLOCK_unlock(&export->lock);
+
+	LogDebug(COMPONENT_EXPORT,
+		 "BUILDING PSEUDOFS: Export_Id %d Path %s Pseudo Path %s junction %p",
+		 state.export->export_id,
+		 state.export->fullpath,
+		 state.export->pseudopath,
+		 state.obj->state->dir.junction_export);
 
 	return true;
 }

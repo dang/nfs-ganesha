@@ -1131,8 +1131,8 @@ static inline int sizeof_fsid(enum fsid_type type)
 
 typedef uint64_t fsal_cookie_t;
 
-typedef bool (*fsal_readdir_cb)(const char *name, void *dir_state,
-				fsal_cookie_t cookie);
+typedef bool (*fsal_readdir_cb)(const char *name, struct fsal_obj_handle *obj,
+				void *dir_state, fsal_cookie_t cookie);
 /**
  * @brief FSAL object operations vector
  */

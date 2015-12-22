@@ -162,10 +162,7 @@ mdc_up_update(struct fsal_export *export, struct gsh_buffdesc *handle,
 		 * an asynchronous call.
 		 */
 
-		/* This idiom is evil. */
-		fsal_acl_status_t acl_status;
-
-		nfs4_acl_release_entry(obj->attrs->acl, &acl_status);
+		nfs4_acl_release_entry(obj->attrs->acl);
 
 		obj->attrs->acl = attr->acl;
 		mutatis_mutandis = true;
