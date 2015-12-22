@@ -947,7 +947,7 @@ state_status_t state_nlm_unshare(struct fsal_obj_handle *obj,
 	new_share_deny = old_share_deny - (old_share_deny & share_deny);
 
 	/* Update the ref counted share state of this file. */
-	state_share_update_counter(obj,
+	state_share_update_counter(obj->state,
 				   old_share_access,
 				   old_share_deny,
 				   new_share_access,
@@ -974,7 +974,7 @@ state_status_t state_nlm_unshare(struct fsal_obj_handle *obj,
 			/* Revert the ref counted share state
 			 * of this file.
 			 */
-			state_share_update_counter(entry,
+			state_share_update_counter(obj->state,
 						   new_share_access,
 						   new_share_deny,
 						   old_share_access,
@@ -1017,7 +1017,7 @@ void state_share_wipe(struct state_hdl *hstate)
 	glist_for_each_safe(glist, glistn, &hstate->file.nlm_share_list) {
 		state = glist_entry(glist, state_t, state_list);
 
-		remove_nlm_share(state, NULL);
+		remove_nlm_share(state);
 	}
 }
 
@@ -1041,7 +1041,7 @@ void state_export_unshare_all(void)
 			break;
 		}
 
-		obj = state->state_obj;
+		obj = get_state_obj_ref(state);
 		owner = state->state_owner;
 
 		/* Get a reference to the state_t */
@@ -1049,12 +1049,6 @@ void state_export_unshare_all(void)
 
 		/* get a reference to the owner */
 		inc_state_owner_ref(owner);
-
-		/* Get a reference to the cache inode while we still hold
-		 * the export lock (since we hold this lock, any other function
-		 * that might be cleaning up this share CAN NOT have released
-		 * the last LRU reference, thus it is safe to grab another. */
-		obj->obj_ops.get_ref(obj);
 
 		/* Drop the export mutex to call unshare */
 		PTHREAD_RWLOCK_unlock(&op_ctx->export->lock);

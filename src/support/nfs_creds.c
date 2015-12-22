@@ -570,7 +570,7 @@ nfsstat4 nfs4_export_check_access(struct svc_req *req)
 /**
  * @brief Perform version independent ACCESS operation.
  *
- * This function wraps a call to cache_inode_access, determining the appropriate
+ * This function wraps a call to fsal_access, determining the appropriate
  * access_mask to use to check all the requested access bits. It requests the
  * allowed and denied access so that it can respond for each requested access
  * with a single access call.
@@ -580,10 +580,10 @@ nfsstat4 nfs4_export_check_access(struct svc_req *req)
  * @param[out] granted_access   The bits granted
  * @param[out] supported_access The bits supported for this inode
  *
- * @return cache inode status
- * @retval CACHE_INODE_SUCCESS all access was granted
- * @retval CACHE_INODE_FSAL_EACCESS one or more access bits were denied
- * @retval other values indicate a cache inode failure
+ * @return FSAL error
+ * @retval ERR_FSAL_NO_ERROR all access was granted
+ * @retval ERR_FSAL_ACCESS one or more access bits were denied
+ * @retval other values indicate a FSAL failure
  *
  */
 

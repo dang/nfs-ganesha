@@ -53,8 +53,9 @@ nfsstat4 nfs4_Errno_verbose(fsal_errors_t, const char *);
 #define nfs4_Errno(e) nfs4_Errno_verbose(e, __func__)
 #define nfs4_Errno_status(e) nfs4_Errno_verbose(e.major, __func__)
 #ifdef _USE_NFS3
-nfsstat3 nfs3_Errno_verbose(cache_inode_status_t, const char *);
+nfsstat3 nfs3_Errno_verbose(fsal_errors_t, const char *);
 #define nfs3_Errno(e) nfs3_Errno_verbose(e, __func__)
+#define nfs3_Errno_status(e) nfs3_Errno_verbose(e.major, __func__)
 #endif
 
 #endif				/* _NFS_CONVERT_H */

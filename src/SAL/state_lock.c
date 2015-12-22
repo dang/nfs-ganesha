@@ -3077,7 +3077,7 @@ state_status_t state_nlm_notify(state_nsm_client_t *nsmclient,
 		/* Release the refcounts we took above. */
 		put_gsh_export(export);
 		dec_state_owner_ref(owner);
-		obj->put_ref(obj);
+		obj->obj_ops.put_ref(obj);
 
 		if (!state_unlock_err_ok(status)) {
 			/* Increment the error count and try the next lock,
@@ -3113,10 +3113,10 @@ state_status_t state_nlm_notify(state_nsm_client_t *nsmclient,
 		}
 
 		/* Extract the bits from the lock entry that we will need
-		 * to proceed with the operation (cache entry, owner, and
+		 * to proceed with the operation (object, owner, and
 		 * export).
 		 */
-		obj = found_share->state_obj;
+		obj = get_state_obj_ref(found_share);
 		owner = found_share->state_owner;
 		export = found_share->state_export;
 
@@ -3166,6 +3166,8 @@ state_status_t state_nlm_notify(state_nsm_client_t *nsmclient,
 		/* Release the refcounts we took above. */
 		put_gsh_export(export);
 		dec_state_owner_ref(owner);
+		obj->obj_ops.put_ref(obj);
+		dec_state_t_ref(found_share);
 
 		if (!state_unlock_err_ok(status)) {
 			/* Increment the error count and try the next share,

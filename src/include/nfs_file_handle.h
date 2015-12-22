@@ -125,8 +125,7 @@ static inline size_t nfs4_sizeof_handle(struct file_handle_v4 *hdl)
 
 /* File handle translation utility */
 #ifdef _USE_NFS3
-cache_entry_t *nfs3_FhandleToCache(nfs_fh3 *,
-				   nfsstat3 *, int *);
+struct fsal_obj_handle *nfs3_FhandleToCache(nfs_fh3 *, nfsstat3 *, int *);
 #endif
 
 bool nfs4_FSALToFhandle(bool allocate,

@@ -274,6 +274,12 @@ option(USE_NFS_RDMA "enable NFS/RDMA support" OFF)
 option(USE_9P "enable 9P support" ON)
 option(USE_9P_RDMA "enable 9P_RDMA support" OFF)
 
+# Enable NFSv3 Support
+option(USE_NFS3 "enable NFSv3 support" ON)
+
+# Enable NLM Support
+option(USE_NLM "enable NLM support" ON)
+
 # This option will stop cmake compilation if a requested FSAL could not be built
 option(STRICT_PACKAGE "Enable strict packaging behavior" OFF )
 
@@ -791,6 +797,8 @@ include_directories(
 # Fixup loose bits of autotools legacy
 set(_USE_9P ${USE_9P})
 set(_USE_9P_RDMA ${USE_9P_RDMA})
+set(_USE_NFS3 ${USE_NFS3})
+set(_USE_NLM ${USE_NLM})
 
 if(USE_CB_SIMULATOR)
   set(_USE_CB_SIMULATOR ON)
@@ -1051,6 +1059,8 @@ message(STATUS "USE_9P = ${USE_9P}")
 message(STATUS "_USE_9P = ${_USE_9P}")
 message(STATUS "_USE_9P_RDMA = ${_USE_9P_RDMA}")
 message(STATUS "USE_NFS_RDMA = ${USE_NFS_RDMA}")
+message(STATUS "USE_NFS3 = ${USE_NFS3}")
+message(STATUS "USE_NLM = ${USE_NLM}")
 message(STATUS "KRB5_PREFIX = ${KRB5_PREFIX}")
 message(STATUS "CEPH_PREFIX = ${CEPH_PREFIX}")
 message(STATUS "HPSS_PREFIX = ${HPSS_PREFIX}")
@@ -1211,6 +1221,16 @@ set(_USE_9P ${_USE_9P}
 set(_USE_9P_RDMA ${_USE_9P_RDMA}
   CACHE BOOL
    "enable 9P_RDMA support"
+   FORCE)
+
+set(USE_NFS3 ${USE_NFS3}
+  CACHE BOOL
+   "enable NFSv3 support"
+   FORCE)
+
+set(USE_NLM ${USE_NLM}
+  CACHE BOOL
+   "enable NLM support"
    FORCE)
 
 set(USE_ADMIN_TOOLS ${USE_ADMIN_TOOLS}

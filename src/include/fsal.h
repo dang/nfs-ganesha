@@ -318,6 +318,8 @@ fsal_status_t fsal_create(struct fsal_obj_handle *parent,
 			  object_file_type_t type, uint32_t mode,
 			  fsal_create_arg_t *create_arg,
 			  struct fsal_obj_handle **obj);
+void fsal_create_set_verifier(struct attrlist *sattr, uint32_t verf_hi,
+			      uint32_t verf_lo);
 bool fsal_create_verify(struct fsal_obj_handle *obj, uint32_t verf_hi,
 			uint32_t verf_lo);
 

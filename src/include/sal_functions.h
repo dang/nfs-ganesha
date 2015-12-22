@@ -232,12 +232,12 @@ int compare_nlm_state(state_t *state1, state_t *state2);
 int Init_nlm_state_hash(void);
 void dec_nlm_state_ref(state_t *state);
 
-/*int get_nlm_state(enum state_type state_type,*/
-		  /*cache_entry_t *state_entry,*/
-		  /*state_owner_t *state_owner,*/
-		  /*bool nsm_state_applies,*/
-		  /*uint32_t nsm_state,*/
-		  /*state_t **pstate);*/
+int get_nlm_state(enum state_type state_type,
+		  struct fsal_obj_handle *state_obj,
+		  state_owner_t *state_owner,
+		  bool nsm_state_applies,
+		  uint32_t nsm_state,
+		  state_t **pstate);
 
 /******************************************************************************
  *

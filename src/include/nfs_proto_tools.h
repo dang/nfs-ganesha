@@ -219,17 +219,17 @@ static inline bool clear_attribute_in_bitmap(struct bitmap4 *bits, int attr)
 
 #ifdef _USE_NFS3
 void nfs_SetWccData(const struct pre_op_attr *before_attr,
-		    cache_entry_t *entry,
+		    struct fsal_obj_handle *entry,
 		    wcc_data * pwcc_data);
 
-void nfs_SetPostOpAttr(cache_entry_t *entry,
+void nfs_SetPostOpAttr(struct fsal_obj_handle *entry,
 		       post_op_attr *attr);
 
-void nfs_SetPreOpAttr(cache_entry_t *entry,
+void nfs_SetPreOpAttr(struct fsal_obj_handle *entry,
 		      pre_op_attr *attr);
 #endif
 
-bool nfs_RetryableError(cache_inode_status_t cache_status);
+bool nfs_RetryableError(fsal_errors_t fsal_errors);;
 
 int nfs3_Sattr_To_FSAL_attr(struct attrlist *pFSALattr, sattr3 *psattr);
 
@@ -272,7 +272,7 @@ bool nfs3_FSALattr_To_Fattr(struct gsh_export *, const struct attrlist *,
 bool is_sticky_bit_set(const struct attrlist *attr);
 
 #ifdef _USE_NFS3
-bool cache_entry_to_nfs3_Fattr(cache_entry_t *, fattr3 *);
+bool file_to_nfs3_Fattr(struct fsal_obj_handle *, fattr3 *);
 #endif
 
 bool nfs3_Sattr_To_FSALattr(struct attrlist *, sattr3 *);

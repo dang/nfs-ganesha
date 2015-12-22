@@ -320,6 +320,9 @@ fsal_status_t fsal_refresh_attrs(struct fsal_obj_handle *obj)
 {
 	fsal_status_t status = { ERR_FSAL_NO_ERROR, 0 };
 
+	if (!obj)
+		return fsalstat(ERR_FSAL_INVAL, 0);
+
 	if (obj->attrs->acl) {
 		fsal_acl_status_t acl_status = 0;
 
@@ -745,6 +748,29 @@ fsal_status_t fsal_lookupp(struct fsal_obj_handle *obj,
 	}
 
 	return obj->obj_ops.lookup(obj, "..", parent);
+}
+
+/**
+ * @brief Set the create verifier
+ *
+ * This function sets the mtime/atime attributes according to the create
+ * verifier
+ *
+ * @param[in] sattr   attrlist to be managed.
+ * @param[in] verf_hi High long of verifier
+ * @param[in] verf_lo Low long of verifier
+ *
+ */
+void
+fsal_create_set_verifier(struct attrlist *sattr, uint32_t verf_hi,
+			 uint32_t verf_lo)
+{
+	sattr->atime.tv_sec = verf_hi;
+	sattr->atime.tv_nsec = 0;
+	FSAL_SET_MASK(sattr->mask, ATTR_ATIME);
+	sattr->mtime.tv_sec = verf_lo;
+	sattr->mtime.tv_nsec = 0;
+	FSAL_SET_MASK(sattr->mask, ATTR_MTIME);
 }
 
 /**

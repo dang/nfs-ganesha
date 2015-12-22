@@ -62,7 +62,7 @@
 
 int nfs3_fsinfo(nfs_arg_t *arg, struct svc_req *req, nfs_res_t *res)
 {
-	cache_entry_t *entry = NULL;
+	struct fsal_obj_handle *obj = NULL;
 	int rc = NFS_REQ_OK;
 
 	if (isDebug(COMPONENT_NFSPROTO)) {
@@ -78,11 +78,11 @@ int nfs3_fsinfo(nfs_arg_t *arg, struct svc_req *req, nfs_res_t *res)
 	res->res_fsinfo3.FSINFO3res_u.resfail.obj_attributes.attributes_follow =
 	    FALSE;
 
-	entry = nfs3_FhandleToCache(&arg->arg_fsinfo3.fsroot,
+	obj = nfs3_FhandleToCache(&arg->arg_fsinfo3.fsroot,
 				    &res->res_fsinfo3.status,
 				    &rc);
 
-	if (entry == NULL) {
+	if (obj == NULL) {
 		/* Status and rc have been set by nfs3_FhandleToCache */
 		goto out;
 	}
@@ -126,15 +126,15 @@ int nfs3_fsinfo(nfs_arg_t *arg, struct svc_req *req, nfs_res_t *res)
 	FSINFO_FIELD->properties =
 	    FSF3_LINK | FSF3_SYMLINK | FSF3_HOMOGENEOUS | FSF3_CANSETTIME;
 
-	nfs_SetPostOpAttr(entry,
+	nfs_SetPostOpAttr(obj,
 			  &(res->res_fsinfo3.FSINFO3res_u.resok.
 			    obj_attributes));
 	res->res_fsinfo3.status = NFS3_OK;
 
  out:
 
-	if (entry)
-		cache_inode_put(entry);
+	if (obj)
+		obj->obj_ops.put_ref(obj);
 
 	return rc;
 }				/* nfs3_fsinfo */
