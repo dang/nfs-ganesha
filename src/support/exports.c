@@ -1549,18 +1549,22 @@ void exports_pkginit(void)
 fsal_status_t nfs_export_get_root_entry(struct gsh_export *export,
 					struct fsal_obj_handle **obj)
 {
-	fsal_status_t status;
+	PTHREAD_RWLOCK_rdlock(&export->lock);
 
-	status = export->fsal_export->exp_ops.lookup_path(export->fsal_export,
-							  export->fullpath,
-							  obj);
-	if (FSAL_IS_ERROR(status))
-		return status;
+	if (export->exp_root_obj)
+		export->exp_root_obj->obj_ops.get_ref(export->exp_root_obj);
+
+	PTHREAD_RWLOCK_unlock(&export->lock);
+
+	*obj = export->exp_root_obj;
+
+	if (!(*obj))
+		return fsalstat(ERR_FSAL_NOENT, 0);
 
 	if ((*obj)->type != DIRECTORY)
 		return fsalstat(ERR_FSAL_NOTDIR, 0);
 
-	return status;
+	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
 
 /**
@@ -1576,10 +1580,11 @@ fsal_status_t nfs_export_get_root_entry(struct gsh_export *export,
 int init_export_root(struct gsh_export *export)
 {
 	fsal_status_t fsal_status;
-	struct fsal_obj_handle *root_handle;
+	struct fsal_obj_handle *obj;
 	struct root_op_context root_op_context;
 	int my_status;
 
+	/* XXX dang no longer pinning, but keeping reference instead */
 	/* Initialize req_ctx */
 	init_root_op_context(&root_op_context, export, export->fsal_export,
 			     0, 0, UNKNOWN_REQUEST);
@@ -1590,8 +1595,7 @@ int init_export_root(struct gsh_export *export)
 		 export->export_id, export->fullpath);
 	fsal_status =
 	    export->fsal_export->exp_ops.lookup_path(export->fsal_export,
-						  export->fullpath,
-						  &root_handle);
+						  export->fullpath, &obj);
 
 	if (FSAL_IS_ERROR(fsal_status)) {
 		my_status = EINVAL;
@@ -1603,18 +1607,22 @@ int init_export_root(struct gsh_export *export)
 		goto out;
 	}
 
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
 	PTHREAD_RWLOCK_wrlock(&export->lock);
 
-	export->exp_root_obj = root_handle;
+	export->exp_root_obj = obj;
+	glist_add_tail(&obj->state->dir.export_roots, &export->exp_root_list);
+	/* Protect this entry from removal (unlink) */
+	atomic_inc_int32_t(&obj->state->dir.exp_root_refcount);
 
 	PTHREAD_RWLOCK_unlock(&export->lock);
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
 	if (isDebug(COMPONENT_EXPORT)) {
 		LogDebug(COMPONENT_EXPORT,
 			 "Added root obj %p FSAL %s for path %s on export_id=%d",
-			 root_handle,
-			 root_handle->fsal->name,
-			 export->fullpath, export->export_id);
+			 obj, obj->fsal->name, export->fullpath,
+			 export->export_id);
 	} else {
 		LogInfo(COMPONENT_EXPORT,
 			"Added root obj for path %s on export_id=%d",
@@ -1625,28 +1633,6 @@ int init_export_root(struct gsh_export *export)
 out:
 	release_root_op_context();
 	return my_status;
-}
-
-/**
- * @brief Release the root cache inode for an export.
- *
- * @param exp [IN] the export
- */
-
-static inline void
-release_export_root_locked(struct gsh_export *export, struct fsal_obj_handle *obj)
-{
-	struct fsal_obj_handle *root_obj = NULL;
-
-	PTHREAD_RWLOCK_wrlock(&export->lock);
-
-	glist_del(&export->exp_root_list);
-	root_obj = export->exp_root_obj;
-	export->exp_root_obj = NULL;
-
-	LogDebug(COMPONENT_EXPORT,
-		 "Released root obj %p for path %s on export_id=%d",
-		 root_obj, export->fullpath, export->export_id);
 }
 
 /**
@@ -1674,7 +1660,23 @@ void release_export_root(struct gsh_export *export)
 	}
 
 	/* Make the export unreachable as a root cache inode */
-	release_export_root_locked(export, obj);
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+	PTHREAD_RWLOCK_wrlock(&export->lock);
+
+	glist_del(&export->exp_root_list);
+
+	export->exp_root_obj = NULL;
+
+	atomic_dec_int32_t(&obj->state->dir.exp_root_refcount);
+
+	PTHREAD_RWLOCK_unlock(&export->lock);
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
+
+	LogDebug(COMPONENT_EXPORT,
+		 "Released root obj %p for path %s on export_id=%d",
+		 obj, export->fullpath, export->export_id);
+
+	obj->obj_ops.put_ref(obj);
 }
 
 static inline void clean_up_export(struct gsh_export *export)
@@ -1699,97 +1701,6 @@ void unexport(struct gsh_export *export)
 	release_export_root(export);
 	clean_up_export(export);
 }
-
-/**
- * @brief Handle killing a cache inode entry that might be an export root.
- *
- * @param entry [IN] the cache inode entry
- */
-
-#if DFG_LATER
-void kill_export_root_entry(cache_entry_t *entry)
-{
-	struct gsh_export *export;
-
-	if (entry->type != DIRECTORY)
-		return;
-
-	while (true) {
-		PTHREAD_RWLOCK_wrlock(&entry->attr_lock);
-
-		export = glist_first_entry(&entry->object.dir.export_roots,
-					   struct gsh_export,
-					   exp_root_list);
-
-		if (export == NULL) {
-			PTHREAD_RWLOCK_unlock(&entry->attr_lock);
-			return;
-		}
-
-		get_gsh_export_ref(export);
-		LogInfo(COMPONENT_CONFIG,
-			"Killing export_id %d because root entry went bad",
-			export->export_id);
-
-		/* Make the export unreachable as a root cache inode */
-		release_export_root_locked(export, entry->obj_handle);
-
-		/* Make the export otherwise unreachable and clean it up */
-		clean_up_export(export);
-
-		put_gsh_export(export);
-	}
-}
-
-/**
- * @brief Handle killing a cache inode entry that is a junction to an export.
- *
- * @param entry [IN] the cache inode entry
- */
-
-void kill_export_junction_entry(cache_entry_t *entry)
-{
-	struct gsh_export *export;
-
-	if (entry->type != DIRECTORY)
-		return;
-
-	PTHREAD_RWLOCK_wrlock(&entry->attr_lock);
-
-	export = entry->object.dir.junction_export;
-
-	if (export == NULL) {
-		PTHREAD_RWLOCK_unlock(&entry->attr_lock);
-		return;
-	}
-
-	/* Detach the export from the inode */
-	entry->object.dir.junction_export = NULL;
-
-	get_gsh_export_ref(export);
-
-	LogInfo(COMPONENT_CONFIG,
-		"Unmounting export_id %d because junction entry went bad",
-		export->export_id);
-
-	PTHREAD_RWLOCK_wrlock(&export->lock);
-
-	/* Detach the export */
-	export->exp_junction_obj = NULL;
-
-	PTHREAD_RWLOCK_unlock(&export->lock);
-	PTHREAD_RWLOCK_unlock(&entry->attr_lock);
-
-	/* Finish unmounting the export */
-	pseudo_unmount_export(export);
-
-	/* Don't remove the export (if export root is still valid, the
-	 * export is still accessible via NFS v3.
-	 */
-
-	put_gsh_export(export);
-}
-#endif
 
 static char *client_types[] = {
 	[PROTO_CLIENT] = "PROTO_CLIENT",

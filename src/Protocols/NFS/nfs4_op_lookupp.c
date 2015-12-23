@@ -196,6 +196,9 @@ int nfs4_op_lookupp(struct nfs_argop4 *op, compound_data_t *data,
 		PTHREAD_RWLOCK_unlock(&original_export->lock);
 	}
 
+	/* Return our ref from above */
+	root_obj->obj_ops.put_ref(root_obj);
+
 not_junction:
 
 	status = fsal_lookupp(dir_obj, &file_obj);

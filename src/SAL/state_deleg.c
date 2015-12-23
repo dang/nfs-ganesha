@@ -60,6 +60,8 @@
  * cache_entry_t state lock must be held at least in read mode while
  * calling this function.
  *
+ * @note The state_lock MUST be held for read
+ *
  * @param[in] ostate	File state
  * @param[in] state     Open state of current OPEN operation.
  *
@@ -177,11 +179,11 @@ state_status_t do_lease_op(struct fsal_obj_handle *obj,
 /**
  * @brief Attempt to acquire a lease lock (delegation)
  *
+ * @note The state_lock MUST be held for write
+ *
  * @param[in]  ostate     File state to get lease lock on
  * @param[in]  owner      Owner for the lease lock
  * @param[in]  state      Associated state for the lock
- *
- * state_lock must be held while calling this function
  */
 state_status_t acquire_lease_lock(struct state_hdl *ostate,
 				  state_owner_t *owner,
@@ -358,6 +360,8 @@ bool init_deleg_heuristics(struct fsal_obj_handle *obj)
  *
  * Decide if a delegation should be granted based on heuristics.
  *
+ * @note The state_lock MUST be held for read
+ *
  * @param[in] ostate File state the delegation will be on.
  * @param[in] client Client that would own the delegation.
  * @param[in] open_state The open state for the inode to be delegated.
@@ -526,11 +530,10 @@ nfsstat4 deleg_revoke(struct fsal_obj_handle *obj, struct state_t *deleg_state)
  * Mark the delegation state revoked, further ops on this state should
  * return NFS4ERR_REVOKED or NFS4ERR_EXPIRED
  *
+ * @note The state_lock MUST be held for write
+ *
  * @param[in] obj   File
  * @param[in] state Delegation state
- *
- * Must be called with cache inode entry's state lock held in read-write
- * mode.
  */
 void state_deleg_revoke(struct fsal_obj_handle *obj, state_t *state)
 {
@@ -552,15 +555,14 @@ void state_deleg_revoke(struct fsal_obj_handle *obj, state_t *state)
  * Return TRUE if there is a conflict and the delegations have been recalled.
  * Return FALSE if there is no conflict.
  *
+ * @note The state_lock MUST be held for read
+ *
  * @param[in] obj   File
  * @param[in] write a boolean indicating whether the operation will read or
  *            change the file.
  *
  * @retval true if there is a conflict and the delegations have been recalled.
  * @retval false if there is no delegation conflict.
- *
- * Must be called with cache inode entry's state lock held in read or read-write
- * mode.
  */
 bool state_deleg_conflict(struct fsal_obj_handle *obj, bool write)
 {
@@ -618,6 +620,14 @@ bool deleg_supported(struct fsal_obj_handle *obj,
 	return true;
 }
 
+/**
+ * @brief Check to see if a deledation can be granted
+ *
+ * @note The state_lock MUST be held for read
+ *
+ * @param[in] ostate	State to check
+ * @return true if can grant, false otherwise
+ */
 bool can_we_grant_deleg(struct state_hdl *ostate, state_t *open_state)
 {
 	struct glist_head *glist;

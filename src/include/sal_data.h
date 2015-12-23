@@ -878,6 +878,7 @@ struct file_deleg_stats {
  * @brief Per-file state lists
  *
  * To be used by FSALs
+ * XXX dang add lock to protect
  */
 struct state_file {
 	/** File owning state */
@@ -913,6 +914,10 @@ struct state_dir {
 	/** List of exports that have this cache inode as their root.
 	 * Protected by state_lock */
 	struct glist_head export_roots;
+	/** There is one export root reference counted for each export
+	    for which this entry is a root for. This field is used
+	    with the atomic inc/dec/fetch routines. */
+	int32_t exp_root_refcount;
 };
 
 struct state_hdl {

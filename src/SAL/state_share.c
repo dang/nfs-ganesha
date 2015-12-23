@@ -94,7 +94,7 @@ static state_status_t do_share_op(struct fsal_obj_handle *obj,
 /**
  * @brief Add new share state
  *
- * The state lock _must_ be held for this call.
+ * @note The state_lock MUST be held for write
  *
  * @param[in,out] obj   File on which to operate
  * @param[in]     owner Open owner
@@ -175,7 +175,7 @@ state_status_t state_share_add(struct fsal_obj_handle *obj,
 /**
  * Remove a share state
  *
- * The state lock _must_ be held for this call.
+ * @note The state_lock MUST be held for write
  *
  * @param[in,out] obj   File to modify
  * @param[in]     owner Open owner
@@ -254,7 +254,7 @@ state_status_t state_share_remove(struct fsal_obj_handle *obj,
 /**
  * @brief Upgrade share modes
  *
- * The state lock _must_ be held for this call.
+ * @note The state_lock MUST be held for write
  *
  * @param[in,out] obj        File to modify
  * @param[in]     state_data New share bits
@@ -348,7 +348,7 @@ state_status_t state_share_upgrade(struct fsal_obj_handle *obj,
 /**
  * @brief Downgrade share mode
  *
- * The state lock _must_ be held for this call.
+ * @note The state_lock MUST be held for write
  *
  * @param[in,out] obj        File to modify
  * @param[in]     state_data New share bits
@@ -558,6 +558,8 @@ static void state_share_update_counter(struct state_hdl *hstate, int
 /**
  * @brief Calculate the union of share access of given file
  *
+ * @note The state_lock MUST be held for read
+ *
  * @param[in] hstate File state to check
  *
  * @return Calculated access.
@@ -580,6 +582,8 @@ static unsigned int state_share_get_share_access(struct state_hdl *hstate)
 
 /**
  * @brief Calculate the union of share deny of given file
+ *
+ * @note The state_lock MUST be held for read
  *
  * @param[in] hstate File state to check
  *
@@ -624,12 +628,15 @@ state_status_t state_share_anonymous_io_start(struct fsal_obj_handle *obj,
 	 */
 	state_status_t status = 0;
 
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 	status = state_share_check_conflict(obj->state,
 					    share_access,
 					    OPEN4_SHARE_DENY_NONE,
 					    bypass);
 	if (status != STATE_SUCCESS) {
 		/* Need to convert the error from STATE_SHARE_CONFLICT */
+		PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 		status = STATE_LOCKED;
 		return status;
 	}
@@ -638,6 +645,7 @@ state_status_t state_share_anonymous_io_start(struct fsal_obj_handle *obj,
 				 share_access & OPEN4_SHARE_ACCESS_WRITE)) {
 		/* Delegations are being recalled. Delay client until that
 		 * process finishes. */
+		PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 		return STATE_FSAL_DELAY;
 	}
 
@@ -652,6 +660,7 @@ state_status_t state_share_anonymous_io_start(struct fsal_obj_handle *obj,
 				   OPEN4_SHARE_DENY_NONE, share_access,
 				   OPEN4_SHARE_DENY_NONE, false);
 
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 	return status;
 }
 
@@ -744,6 +753,7 @@ state_status_t state_nlm_share(struct fsal_obj_handle *obj,
 	unsigned int old_share_deny;
 	fsal_share_param_t share_param;
 	fsal_openflags_t openflags;
+	fsal_status_t fsal_status;
 	state_status_t status = 0;
 	struct fsal_export *fsal_export = op_ctx->fsal_export;
 	state_nlm_client_t *client = owner->so_owner.so_nlm_owner.so_client;
@@ -773,6 +783,15 @@ state_status_t state_nlm_share(struct fsal_obj_handle *obj,
 
 	if (reclaim)
 		openflags |= FSAL_O_RECLAIM;
+
+	fsal_status = obj->obj_ops.open(obj, openflags);
+	if (FSAL_IS_ERROR(fsal_status)) {
+		status = state_error_convert(fsal_status);
+		LogFullDebug(COMPONENT_STATE, "Could not open file");
+		goto out;
+	}
+
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
 
 	/* Check if new share state has conflicts. */
 	status = state_share_check_conflict(obj->state,
@@ -877,7 +896,10 @@ state_status_t state_nlm_share(struct fsal_obj_handle *obj,
 	LogFullDebug(COMPONENT_STATE, "added share_access %u, share_deny %u",
 		     share_access, share_deny);
 
- out_unlock:
+out_unlock:
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
+
+out:
 
 	return status;
 }
@@ -909,6 +931,8 @@ state_status_t state_nlm_unshare(struct fsal_obj_handle *obj,
 	unsigned int new_share_deny;
 	fsal_share_param_t share_param;
 	state_status_t status = 0;
+
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
 
 	/* Get the current union of share states of this file. */
 	old_entry_share_access = state_share_get_share_access(obj->state);
@@ -973,6 +997,8 @@ state_status_t state_nlm_unshare(struct fsal_obj_handle *obj,
 	}
 
  out:
+
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
 	return status;
 }

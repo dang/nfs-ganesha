@@ -145,6 +145,8 @@ int nfs4_op_layoutreturn(struct nfs_argop4 *op, compound_data_t *data,
 		spec.length = arg_LAYOUTRETURN4->lora_layoutreturn.
 					layoutreturn4_u.lr_layout.lrf_length;
 
+		PTHREAD_RWLOCK_wrlock(&data->current_obj->state->state_lock);
+
 		res_LAYOUTRETURN4->lorr_status = nfs4_return_one_state(
 			data->current_obj,
 			arg_LAYOUTRETURN4->lora_layoutreturn.lr_returntype,
@@ -158,6 +160,8 @@ int nfs4_op_layoutreturn(struct nfs_argop4 *op, compound_data_t *data,
 			arg_LAYOUTRETURN4->lora_layoutreturn.layoutreturn4_u.
 				lr_layout.lrf_body.lrf_body_val,
 			&deleted);
+
+		PTHREAD_RWLOCK_unlock(&data->current_obj->state->state_lock);
 
 		if (res_LAYOUTRETURN4->lorr_status == NFS4_OK) {
 			if (deleted) {
@@ -305,6 +309,8 @@ int nfs4_op_layoutreturn(struct nfs_argop4 *op, compound_data_t *data,
 				}
 			}
 
+			PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 			res_LAYOUTRETURN4->lorr_status = nfs4_return_one_state(
 			    obj,
 			    arg_LAYOUTRETURN4->lora_layoutreturn.lr_returntype,
@@ -315,6 +321,8 @@ int nfs4_op_layoutreturn(struct nfs_argop4 *op, compound_data_t *data,
 			    0,
 			    NULL,
 			    &deleted);
+
+			PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
 			/* Release the state_t reference */
 			dec_state_t_ref(layout_state);
@@ -383,7 +391,7 @@ void nfs4_op_layoutreturn_Free(nfs_resop4 *resp)
 /**
  * @brief Handle recalls corresponding to one stateid
  *
- * Must hold the state_lock in write mode.
+ * @note the state_lock MUST be held for write
  *
  * @param[in]     args         Layout return args
  * @param[in]     ostate       File state
@@ -479,7 +487,7 @@ void handle_recalls(struct fsal_layoutreturn_arg *arg,
  * the specified range and iomode.  If all layouts have been returned,
  * it deletes the state.
  *
- * Must hold the state_lock in write mode.
+ * @note The state_lock MUST be held for write
  *
  * @param[in]     obj          File whose layouts we return
  * @param[in]     return_type  Whether this is a file, fs, or server return

@@ -744,6 +744,8 @@ static void remove_from_locklist(state_lock_entry_t *lock_entry)
 /**
  * @brief Find a conflicting entry
  *
+ * @note The state_lock MUST be held for read
+ *
  * @param[in] ostate File state to search
  * @param[in] owner The lock owner
  * @param[in] lock  Lock to check
@@ -796,6 +798,8 @@ static state_lock_entry_t *get_overlapping_entry(struct state_hdl *ostate,
  * We need to iterate over the full lock list and remove
  * any mapping entry. And l_offset = 0 and sle_lock.lock_length = 0 lock_entry
  * implies remove all entries
+ *
+ * @note The state_lock MUST be held for write
  *
  * @param[in,out] ostate     File state to operate on
  * @param[in]     lock_entry Lock to add
@@ -1681,6 +1685,8 @@ void state_complete_grant(state_cookie_entry_t *cookie_entry)
 	 * entry MUST be pinned.
 	 */
 
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 	/* We need to make sure lock is ready to be granted */
 	if (lock_entry->sle_blocked == STATE_GRANTING) {
 		/* Mark lock as granted */
@@ -1701,6 +1707,8 @@ void state_complete_grant(state_cookie_entry_t *cookie_entry)
 	 * was in progress, this will completely clean up the lock.
 	 */
 	free_cookie(cookie_entry, true);
+
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 }
 
 /**
@@ -1785,7 +1793,11 @@ void process_blocked_lock_upcall(state_block_data_t *block_data)
 {
 	state_lock_entry_t *lock_entry = block_data->sbd_lock_entry;
 
+	PTHREAD_RWLOCK_wrlock(&lock_entry->sle_obj->state->state_lock);
+
 	try_to_grant_lock(lock_entry);
+
+	PTHREAD_RWLOCK_unlock(&lock_entry->sle_obj->state->state_lock);
 }
 
 /**
@@ -1929,7 +1941,7 @@ void cancel_blocked_lock(struct fsal_obj_handle *obj,
  * @param[in,out] ostate File state on which to operate
  * @param[in]     owner  The state owner for the lock
  * @param[in]     state  Associated state
- * @param[in]     lock   Lock description
+ * @param[in]     lock   Lock description;
  */
 void cancel_blocked_locks_range(struct state_hdl *ostate,
 				state_owner_t *owner,
@@ -1989,6 +2001,8 @@ state_status_t state_release_grant(state_cookie_entry_t *cookie_entry)
 	lock_entry = cookie_entry->sce_lock_entry;
 	obj = cookie_entry->sce_obj;
 
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 	/* We need to make sure lock is only "granted" once...
 	 * It's (remotely) possible that due to latency, we might end up
 	 * processing two GRANTED_RSP calls at the same time.
@@ -2029,6 +2043,15 @@ state_status_t state_release_grant(state_cookie_entry_t *cookie_entry)
 
 	/* Check to see if we can grant any blocked locks. */
 	grant_blocked_locks(obj->state);
+
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
+
+	/* In case all locks have wound up free,
+	 * we must release the object reference.
+	 */
+	if (glist_empty(&obj->state->file.lock_list))
+		obj->obj_ops.put_ref(obj);
+
 
 	return status;
 }
@@ -2159,6 +2182,8 @@ state_status_t do_unlock_no_owner(struct fsal_obj_handle *obj,
  *
  * We do state management and call down to the FSAL as appropriate, so
  * that the caller has a single entry point.
+ *
+ * @note The state_lock MUST be held for write
  *
  * @param[in]  obj    File on which to operate
  * @param[in]  export   Export holding file
@@ -2323,6 +2348,8 @@ state_status_t state_test(struct fsal_obj_handle *obj,
 		goto out;
 	}
 
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 	found_entry = get_overlapping_entry(obj->state, owner, lock);
 
 	if (found_entry != NULL) {
@@ -2351,6 +2378,8 @@ state_status_t state_test(struct fsal_obj_handle *obj,
 
 	if (isFullDebug(COMPONENT_STATE) && isFullDebug(COMPONENT_MEMLEAKS))
 		LogList("Lock List", obj, &obj->state->file.lock_list);
+
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
  out:
 
@@ -2391,8 +2420,6 @@ state_status_t state_lock(struct fsal_obj_handle *obj,
 	state_status_t status = 0;
 	fsal_openflags_t openflags;
 
-	/* XXX dang pin? */
-
 	/*
 	 * If we already have a read lock, and then get a write lock
 	 * request, we need to close the file that was already open for
@@ -2417,6 +2444,8 @@ state_status_t state_lock(struct fsal_obj_handle *obj,
 		LogFullDebug(COMPONENT_STATE, "Could not open file");
 		goto out;
 	}
+
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
 
 	if (blocking != STATE_NON_BLOCKING) {
 		/* First search for a blocked request. Client can ignore the
@@ -2660,6 +2689,10 @@ state_status_t state_lock(struct fsal_obj_handle *obj,
 		/* Insert entry into lock list */
 		LogEntry("New lock", found_entry);
 
+		if (glist_empty(&obj->state->file.lock_list))
+		    /* List was empty, get ref for list */
+		    obj->obj_ops.get_ref(obj);
+
 		glist_add_tail(&obj->state->file.lock_list,
 			       &found_entry->sle_list);
 
@@ -2696,6 +2729,8 @@ state_status_t state_lock(struct fsal_obj_handle *obj,
 	}
 
  out_unlock:
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
+
  out:
 
 	return status;
@@ -2728,6 +2763,8 @@ state_status_t state_unlock(struct fsal_obj_handle *obj,
 		status = STATE_BAD_TYPE;
 		goto out;
 	}
+
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
 
 	/* If lock list is empty, there really isn't any work for us to do. */
 	if (glist_empty(&obj->state->file.lock_list)) {
@@ -2809,6 +2846,7 @@ state_status_t state_unlock(struct fsal_obj_handle *obj,
 		dump_all_locks("All locks (after unlock)");
 
  out_unlock:
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
  out:
 
@@ -2836,6 +2874,8 @@ state_status_t state_cancel(struct fsal_obj_handle *obj,
 			obj, owner, lock);
 		return STATE_BAD_TYPE;
 	}
+
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
 
 	/* If lock list is empty, there really isn't any work for us to do. */
 	if (glist_empty(&obj->state->file.lock_list)) {
@@ -2868,6 +2908,7 @@ state_status_t state_cancel(struct fsal_obj_handle *obj,
 	}
 
  out_unlock:
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
 	return STATE_SUCCESS;
 }
@@ -3474,12 +3515,12 @@ void available_blocked_lock_upcall(struct fsal_obj_handle *obj, void *owner,
  *
  * @param[in] obj File to free
  */
-void state_lock_wipe(struct fsal_obj_handle *obj)
+void state_lock_wipe(struct state_hdl *hstate)
 {
-	if (glist_empty(&obj->state->file.lock_list))
+	if (glist_empty(&hstate->file.lock_list))
 		return;
 
-	free_list(&obj->state->file.lock_list);
+	free_list(&hstate->file.lock_list);
 }
 
 void cancel_all_nlm_blocked(void)

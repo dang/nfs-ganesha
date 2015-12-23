@@ -67,6 +67,8 @@ pthread_mutex_t all_state_v4_mutex = PTHREAD_MUTEX_INITIALIZER;
  * entry.  It exists to allow callers to integrate state into a larger
  * operation.
  *
+ * @note state_lock MUST be held for write
+ *
  * @param[in,out] ostate      file state to operate on
  * @param[in]     state_type  State to be defined
  * @param[in]     state_data  Data related to this state
@@ -136,14 +138,19 @@ state_status_t state_add_impl(struct state_hdl *ostate,
 
 	glist_init(&pnew_state->state_list);
 
-	/* We need to initialize state_owner and state_entry now so that
-	 * the state can be indexed by owner/entry. We don't insert into
-	 * lists and take references yet since no one else can see this
-	 * state until we are completely done since we hold the state_lock.
-	 * Might as well grab export now also...
+	/* We need to initialize state_owner, state_entry, and state_obj now so
+	 * that the state can be indexed by owner/entry. We don't insert into
+	 * lists and take references yet since no one else can see this state
+	 * until we are completely done since we hold the state_lock.  Might as
+	 * well grab export now also...
 	 */
 	pnew_state->state_export = op_ctx->export;
 	pnew_state->state_owner = owner_input;
+	fh_desc.addr = &pnew_state->state_obj.digest;
+	fh_desc.len = sizeof(pnew_state->state_obj.digest);
+	ostate->file.obj->obj_ops.handle_digest(ostate->file.obj,
+						FSAL_DIGEST_NFSV4, &fh_desc);
+	pnew_state->state_obj.len = fh_desc.len;
 
 	/* Add the state to the related hashtable */
 	if (!nfs4_State_Set(pnew_state)) {
@@ -180,11 +187,6 @@ state_status_t state_add_impl(struct state_hdl *ostate,
 	/* Add state to list for file */
 	PTHREAD_MUTEX_lock(&pnew_state->state_mutex);
 	glist_add_tail(&ostate->file.list_of_states, &pnew_state->state_list);
-	fh_desc.addr = &pnew_state->state_obj.digest;
-	fh_desc.len = sizeof(pnew_state->state_obj.digest);
-	ostate->file.obj->obj_ops.handle_digest(ostate->file.obj,
-						FSAL_DIGEST_NFSV4, &fh_desc);
-	pnew_state->state_obj.len = fh_desc.len;
 	PTHREAD_MUTEX_unlock(&pnew_state->state_mutex);
 
 	/* Add state to list for owner */
@@ -270,9 +272,11 @@ state_status_t state_add(struct fsal_obj_handle *obj,
 		return STATE_BAD_TYPE;
 	}
 
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
 	status =
 	    state_add_impl(obj->state, state_type, state_data, owner_input,
 			   state, refer);
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
 	return status;
 }
@@ -280,7 +284,7 @@ state_status_t state_add(struct fsal_obj_handle *obj,
 /**
  * @brief Remove a state from a file
  *
- * The caller must hold the state lock exclusively.
+ * @note The state_lock MUST be held for write.
  *
  * @param[in]     state The state to remove
  *
@@ -401,11 +405,11 @@ void state_del(state_t *state)
 		return;
 	}
 
-	/*PTHREAD_RWLOCK_wrlock(&entry->state_lock);*/
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
 
 	state_del_locked(state);
 
-	/*PTHREAD_RWLOCK_unlock(&entry->state_lock);*/
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 }
 
 /**
@@ -499,6 +503,8 @@ fail:
  *
  * Used by cache_inode_kill_entry in the event that the FSAL says a
  * handle is stale.
+ *
+ * @note state_lock MUST be held for write
  *
  * @param[in,out] ostate File state to wipe
  */
@@ -618,6 +624,8 @@ void release_openstate(state_owner_t *owner)
 
 		PTHREAD_MUTEX_unlock(&owner->so_mutex);
 
+		PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 		if (state->state_type == STATE_TYPE_SHARE) {
 			op_ctx->export = export;
 			op_ctx->fsal_export = export->fsal_export;
@@ -638,6 +646,8 @@ void release_openstate(state_owner_t *owner)
 
 		/* Close the file in FSAL through the cache inode */
 		obj->obj_ops.close(obj);
+
+		PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
 		/* Release ref we held during state_del */
 		obj->obj_ops.put_ref(obj);
@@ -714,7 +724,9 @@ void revoke_owner_delegs(state_owner_t *client_owner)
 		PTHREAD_MUTEX_unlock(&client_owner->so_mutex);
 		so_mutex_held = false;
 
+		PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
 		state_deleg_revoke(obj, state);
+		PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
 		/* Close the file in FSAL */
 		obj->obj_ops.close(obj);
@@ -801,6 +813,8 @@ void state_export_release_nfs4_state(void)
 		PTHREAD_RWLOCK_unlock(&op_ctx->export->lock);
 		hold_export_lock = false;
 
+		PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 		/* this deletes the state too */
 
 		(void) nfs4_return_one_state(obj,
@@ -817,6 +831,8 @@ void state_export_release_nfs4_state(void)
 				"Layout state not destroyed during export cleanup.");
 			errcnt++;
 		}
+
+		PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
 		/* Release the references taken above */
 		obj->obj_ops.put_ref(obj);
@@ -869,6 +885,8 @@ void state_export_release_nfs4_state(void)
 		PTHREAD_RWLOCK_unlock(&op_ctx->export->lock);
 		hold_export_lock = false;
 
+		PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 		if (state->state_type == STATE_TYPE_SHARE) {
 			state_status = state_share_remove(obj, owner, state);
 
@@ -882,6 +900,7 @@ void state_export_release_nfs4_state(void)
 				/* Release the references taken above */
 				dec_state_owner_ref(owner);
 				dec_state_t_ref(state);
+				PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 				continue;
 			}
 		}
@@ -892,6 +911,8 @@ void state_export_release_nfs4_state(void)
 		} else {
 			state_del_locked(state);
 		}
+
+		PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
 		/* Release the references taken above */
 		obj->obj_ops.put_ref(obj);

@@ -1274,11 +1274,15 @@ void state_wipe_file(struct fsal_obj_handle *obj)
 	if (obj->type != REGULAR_FILE)
 		return;
 
-	state_lock_wipe(obj);
+	PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
+	state_lock_wipe(obj->state);
 #ifdef _USE_NLM
 	state_share_wipe(obj->state);
 #endif /* _USE_NLM */
 	state_nfs4_state_wipe(obj->state);
+
+	PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
 #ifdef DEBUG_SAL
 	dump_all_states();

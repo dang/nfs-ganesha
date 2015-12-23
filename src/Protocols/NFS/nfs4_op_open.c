@@ -66,6 +66,8 @@ void nfs4_op_open_CopyRes(OPEN4res *res_dst, OPEN4res *res_src)
  * This function performs the actual open operation in cache_inode and
  * the State Abstraction layer.
  *
+ * @note state_lock MUST be held for write
+ *
  * @param[in]     op        Arguments to the OPEN operation
  * @param[in,out] data      Compound's data
  * @param[in]     owner     The open owner
@@ -1400,6 +1402,8 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
 	if (arg_OPEN4->claim.claim)
 		openflags |= FSAL_O_RECLAIM;
 
+	PTHREAD_RWLOCK_wrlock(&data->current_obj->state->state_lock);
+
 	res_OPEN4->status = open4_do_open(op,
 					  data,
 					  owner,
@@ -1411,6 +1415,8 @@ int nfs4_op_open(struct nfs_argop4 *op, compound_data_t *data,
 	if (res_OPEN4->status == NFS4_OK)
 		do_delegation(arg_OPEN4, res_OPEN4, data, owner, file_state,
 			      clientid);
+
+	PTHREAD_RWLOCK_unlock(&data->current_obj->state->state_lock);
 
 	if (res_OPEN4->status != NFS4_OK) {
 		LogDebug(COMPONENT_NFS_V4, "open4_do_open failed");

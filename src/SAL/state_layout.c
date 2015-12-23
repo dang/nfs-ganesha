@@ -122,6 +122,8 @@ state_status_t state_delete_segment(state_layout_segment_t *segment)
  * This function finds a layout corresponding to a given file,
  * clientid, and layout type if one exists.
  *
+ * @note state_lock MUST be held for read
+ *
  * @param[in]  obj    File
  * @param[in]  owner  The state owner.  This must be a clientid owner.
  * @param[in]  type   Layout type specified by the client.
@@ -222,6 +224,8 @@ void revoke_owner_layouts(state_owner_t *client_owner)
 		PTHREAD_MUTEX_unlock(&client_owner->so_mutex);
 		so_mutex_held = false;
 
+		PTHREAD_RWLOCK_wrlock(&obj->state->state_lock);
+
 		(void) nfs4_return_one_state(obj,
 					     LAYOUTRETURN4_FILE,
 					     circumstance_revoke,
@@ -236,6 +240,8 @@ void revoke_owner_layouts(state_owner_t *client_owner)
 			LogCrit(COMPONENT_PNFS,
 				"Layout state not destroyed during lease expiry.");
 		}
+
+		PTHREAD_RWLOCK_unlock(&obj->state->state_lock);
 
 		if (errcnt < STATE_ERR_MAX) {
 			/* Loop again, but since we droped the so_mutex, we

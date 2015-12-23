@@ -596,6 +596,8 @@ state_status_t layoutrecall(struct fsal_module *fsal,
 	struct gsh_export *exp = NULL;
 	state_owner_t *owner = NULL;
 
+	/* XXX dang in original, this took the state_lock, but it does nothing
+	 * with the cache_entry */
 	rc = cache_inode_status_to_state_status(up_get(fsal, handle, &obj));
 	if (rc != STATE_SUCCESS)
 		return rc;

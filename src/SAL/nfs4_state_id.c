@@ -203,10 +203,8 @@ int display_stateid(struct display_buffer *dspbuf, state_t *state)
 	if (b_left <= 0)
 		return b_left;
 
-	/* XXX dang - Display object descriptor */
 	b_left = display_printf(dspbuf,
 				" obj=%p type=%s seqid=%"PRIu32" owner={",
-				" entry=%p type=%s seqid=%"PRIu32" owner={",
 				&state->state_obj,
 				str_state_type(state),
 				state->state_seqid);
@@ -326,6 +324,7 @@ static hash_parameter_t state_id_param = {
 	.val_to_str = display_state_id_val,
 	.flags = HT_FLAG_CACHE,
 	.ht_log_component = COMPONENT_STATE,
+	.ht_name = "State ID Table"
 };
 
 /**
@@ -346,7 +345,7 @@ int compare_state_obj(struct gsh_buffdesc *buff1, struct gsh_buffdesc *buff2)
 		return 1;
 
 	if (memcmp(state1->state_obj.digest, state2->state_obj.digest,
-		   sizeof(state1->state_obj.digest)))
+		   state1->state_obj.len))
 		return 1;
 
 	return compare_nfs4_owner(state1->state_owner, state2->state_owner);
@@ -434,6 +433,7 @@ static hash_parameter_t state_obj_param = {
 	.val_to_str = display_state_id_val,
 	.flags = HT_FLAG_CACHE,
 	.ht_log_component = COMPONENT_STATE,
+	.ht_name = "State Obj Table"
 };
 
 /**
@@ -739,7 +739,10 @@ bool nfs4_State_Del(state_t *state)
 
 	err = HashTable_Del(ht_state_id, &buffkey, &old_key, &old_value);
 
-	if (err != HASHTABLE_SUCCESS) {
+	if (err == HASHTABLE_ERROR_NO_SUCH_KEY) {
+		/* Already gone */
+		return false;
+	} else if (err != HASHTABLE_SUCCESS) {
 		char str[LOG_BUFF_LEN];
 		struct display_buffer dspbuf = {sizeof(str), str, str};
 
@@ -1076,11 +1079,11 @@ nfsstat4 nfs4_Check_Stateid(stateid4 *stateid, struct fsal_obj_handle *fsal_obj,
 
 	/* Sanity check : Is this the right file ? */
 	if (fsal_obj && !fsal_obj->obj_ops.handle_cmp(fsal_obj, obj2)) {
-		status = NFS4ERR_BAD_STATEID;
 		if (str_valid)
 			LogDebug(COMPONENT_STATE,
 				 "Check %s stateid found stateid %s has wrong file",
 				 tag, str);
+		status = NFS4ERR_BAD_STATEID;
 		goto failure;
 	}
 
@@ -1150,9 +1153,13 @@ nfsstat4 nfs4_Check_Stateid(stateid4 *stateid, struct fsal_obj_handle *fsal_obj,
 
 	if ((flags & STATEID_SPECIAL_FREE) != 0) {
 		switch (state2->state_type) {
+			bool empty;
 		case STATE_TYPE_LOCK:
-			if (glist_empty
-			    (&state2->state_data.lock.state_locklist)) {
+			PTHREAD_RWLOCK_rdlock(&obj2->state->state_lock);
+			empty = glist_empty(
+				&state2->state_data.lock.state_locklist);
+			PTHREAD_RWLOCK_unlock(&obj2->state->state_lock);
+			if (empty) {
 				if (str_valid)
 					LogFullDebug(COMPONENT_STATE,
 						     "Check %s stateid %s has no locks, ok to free",
@@ -1211,6 +1218,7 @@ nfsstat4 nfs4_Check_Stateid(stateid4 *stateid, struct fsal_obj_handle *fsal_obj,
  replay:
 
 	if (obj2 != NULL) {
+		obj2->obj_ops.put_ref(obj2);
 		dec_state_owner_ref(owner2);
 	}
 
