@@ -639,9 +639,8 @@ static fsal_status_t mdcache_rename(struct fsal_obj_handle *obj_hdl,
 			mdcache_dirent_invalidate_all(mdc_newdir);
 		}
 
-		/* Unhash the destinastion, if it's got no state */
-		if (!mdc_has_state(mdc_lookup_dst))
-			(void)mdcache_kill_entry(mdc_lookup_dst);
+		/* Mark unreachable */
+		mdc_unreachable(mdc_lookup_dst);
 	}
 
 	if (mdc_olddir == mdc_newdir) {
@@ -902,8 +901,7 @@ static fsal_status_t mdcache_unlink(struct fsal_obj_handle *dir_hdl,
 	} else
 		(void)mdcache_invalidate(entry, MDCACHE_INVALIDATE_ATTRS);
 
-	if (!mdc_has_state(entry))
-		(void)mdcache_kill_entry(entry);
+	mdc_unreachable(entry);
 
 	return status;
 }

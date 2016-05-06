@@ -177,6 +177,8 @@ static const uint32_t MDCACHE_TRUST_ATTRS = 0x00000001;
 static const uint32_t MDCACHE_TRUST_CONTENT = 0x00000002;
 /** The directory has been populated (negative lookups are meaningful) */
 static const uint32_t MDCACHE_DIR_POPULATED = 0x00000004;
+/** The entry has been removed, but not unhashed due to state */
+static const uint32_t MDCACHE_UNREACHABLE = 0x00000008;
 
 
 /**
@@ -559,6 +561,25 @@ mdc_has_state(mdcache_entry_t *entry)
 		/* No state for these types */
 		return false;
 	}
+}
+
+/**
+ * @brief Mark an entry as unreachable
+ *
+ * An entry has become unreachable.  If it has no state, kill it.  Otherwise,
+ * mark it unreachable so that it can be killed when state is freed.
+ *
+ * @param[in] entry	Entry to mark
+ */
+static inline void
+mdc_unreachable(mdcache_entry_t *entry)
+{
+	if (!mdc_has_state(entry)) {
+		mdcache_kill_entry(entry);
+		return;
+	}
+
+	atomic_set_uint32_t_bits(&entry->mde_flags, MDCACHE_UNREACHABLE);
 }
 
 
