@@ -527,6 +527,41 @@ mdc_remove_export_map(struct entry_export_map *expmap)
 }
 
 
+/**
+ * @brief Check to see if an entry has state
+ *
+ * long description
+ *
+ * @param[in] entry	Entry to check
+ * @return true if has state, false otherwise
+ */
+static inline bool
+mdc_has_state(mdcache_entry_t *entry)
+{
+	switch (entry->obj_handle.type) {
+	case REGULAR_FILE:
+		if (!glist_empty(&entry->fsobj.hdl.file.list_of_states))
+			return true;
+		if (!glist_empty(&entry->fsobj.hdl.file.layoutrecall_list))
+			return true;
+		if (!glist_empty(&entry->fsobj.hdl.file.lock_list))
+			return true;
+		if (!glist_empty(&entry->fsobj.hdl.file.nlm_share_list))
+			return true;
+		return false;
+	case DIRECTORY:
+		if (entry->fsobj.fsdir.dhdl.dir.junction_export)
+			return true;
+		if (entry->fsobj.fsdir.dhdl.dir.exp_root_refcount)
+			return true;
+		return false;
+	default:
+		/* No state for these types */
+		return false;
+	}
+}
+
+
 /* Handle methods */
 
 /**
