@@ -3180,49 +3180,6 @@ void nfs4_Fattr_Free(fattr4 *fattr)
 }
 
 /**
- * @brief Structure for Fattr_filler callback
- */
-
-struct Fattr_filler_opaque {
-	fattr4 *Fattr;		/*< Fattr to fill */
-	compound_data_t *data;	/*< Compound data */
-	nfs_fh4 *objFH;		/*< Object file handle */
-	struct bitmap4 *Bitmap;	/*< Bitmap of entries to fill */
-};
-
-/**
- * @brief Callback to fill a fattr
- *
- * This function is the callback for file_To_Fattr.
- *
- * @param[in] opaque Opaque structure
- * @param[in] attr   Attribute list
- *
- * @retval FSAL status
- */
-
-static fsal_errors_t Fattr_filler(void *opaque,
-					 struct fsal_obj_handle *obj,
-					 const struct attrlist *attr,
-					 uint64_t mounted_on_fileid,
-					 uint64_t cookie,
-					 enum cb_state cb_state)
-{
-	struct Fattr_filler_opaque *f = (struct Fattr_filler_opaque *)opaque;
-	struct xdr_attrs_args args = {
-		.attrs = (struct attrlist *)attr,
-		.data = f->data,
-		.hdl4 = f->objFH,
-		.mounted_on_fileid = mounted_on_fileid
-	};
-
-	if (nfs4_FSALattr_To_Fattr(&args, f->Bitmap, f->Fattr) != 0)
-		return ERR_FSAL_IO;
-
-	return ERR_FSAL_NO_ERROR;
-}
-
-/**
  * @brief Fill NFSv4 Fattr from a file
  *
  * This function fills an NFSv4 Fattr from a file.
@@ -3244,11 +3201,12 @@ nfsstat4 file_To_Fattr(struct fsal_obj_handle *obj, fattr4 *Fattr,
 			      compound_data_t *data, nfs_fh4 *objFH,
 			      struct bitmap4 *Bitmap)
 {
-	struct Fattr_filler_opaque f = {
-		.Fattr = Fattr,
+	fsal_status_t status;
+	struct attrlist attrs;
+	struct xdr_attrs_args args = {
+		.attrs = (struct attrlist *)&attrs,
 		.data = data,
-		.objFH = objFH,
-		.Bitmap = Bitmap
+		.hdl4 = objFH,
 	};
 
 	/* Permission check only if ACL is asked for.
@@ -3272,8 +3230,6 @@ nfsstat4 file_To_Fattr(struct fsal_obj_handle *obj, fattr4 *Fattr,
 		}
 	} else {
 #ifdef ENABLE_RFC_ACL
-		fsal_status_t status;
-
 		LogDebug(COMPONENT_NFS_V4_ACL,
 			 "Permission check for ATTR for obj %p", obj);
 
@@ -3284,7 +3240,7 @@ nfsstat4 file_To_Fattr(struct fsal_obj_handle *obj, fattr4 *Fattr,
 			LogDebug(COMPONENT_NFS_V4_ACL,
 				 "Permission check for ATTR for obj %p failed with %s",
 				 obj, fsal_err_txt(status));
-			return nfs4_Errno(status);
+			return nfs4_Errno_status(status);
 		}
 #else /* ENABLE_RFC_ACL */
 		LogDebug(COMPONENT_NFS_V4_ACL,
@@ -3292,7 +3248,16 @@ nfsstat4 file_To_Fattr(struct fsal_obj_handle *obj, fattr4 *Fattr,
 #endif /* ENABLE_RFC_ACL */
 	}
 
-	return nfs4_Errno(fsal_getattr(obj, &f, Fattr_filler, CB_ORIGINAL));
+	status = fsal_getattrs(obj, &attrs);
+	if (FSAL_IS_ERROR(status))
+		return nfs4_Errno_status(status);
+
+	args.mounted_on_fileid = attrs.fileid;
+
+	if (nfs4_FSALattr_To_Fattr(&args, Bitmap, Fattr) != 0)
+		return NFS4ERR_IO;
+
+	return NFS4_OK;
 }
 
 int nfs4_Fattr_Fill_Error(fattr4 *Fattr, nfsstat4 rdattr_error)

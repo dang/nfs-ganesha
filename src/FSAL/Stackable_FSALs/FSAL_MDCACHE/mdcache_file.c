@@ -173,7 +173,7 @@ fsal_status_t mdcache_read(struct fsal_obj_handle *obj_hdl, uint64_t offset,
 	       );
 
 	if (!FSAL_IS_ERROR(status))
-		mdc_set_time_current(&obj_hdl->attrs->atime);
+		mdc_set_time_current(&entry->attrs.atime);
 	else if (status.major == ERR_FSAL_DELAY)
 		mdcache_kill_entry(entry);
 
@@ -210,7 +210,7 @@ fsal_status_t mdcache_read_plus(struct fsal_obj_handle *obj_hdl,
 	       );
 
 	if (!FSAL_IS_ERROR(status))
-		mdc_set_time_current(&obj_hdl->attrs->atime);
+		mdc_set_time_current(&entry->attrs.atime);
 	else if (status.major == ERR_FSAL_DELAY)
 		mdcache_kill_entry(entry);
 
@@ -623,7 +623,7 @@ fsal_status_t mdcache_read2(struct fsal_obj_handle *obj_hdl,
 	       );
 
 	if (!FSAL_IS_ERROR(status))
-		mdc_set_time_current(&obj_hdl->attrs->atime);
+		mdc_set_time_current(&entry->attrs.atime);
 	else if (status.major == ERR_FSAL_DELAY)
 		mdcache_kill_entry(entry);
 

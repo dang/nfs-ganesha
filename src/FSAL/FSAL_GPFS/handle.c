@@ -61,7 +61,6 @@ static struct gpfs_fsal_obj_handle *alloc_handle(struct gpfs_file_handle *fh,
 			  sizeof(struct gpfs_file_handle));
 
 	hdl->handle = (struct gpfs_file_handle *)&hdl[1];
-	hdl->obj_handle.attrs = &hdl->attributes;
 	hdl->obj_handle.fs = fs;
 	memcpy(hdl->handle, fh, sizeof(struct gpfs_file_handle));
 	hdl->obj_handle.type = attributes->type;
@@ -121,7 +120,12 @@ static fsal_status_t lookup(struct fsal_obj_handle *parent,
 		retval = EXDEV;
 		goto hdlerr;
 	}
-	attrib.mask = parent->attrs->mask;
+
+	/* Get attrib mask from parent */
+	status = parent->obj_ops.getattrs(parent, &attrib);
+	if (FSAL_IS_ERROR(status))
+		return status;
+
 	status = GPFSFSAL_lookup(op_ctx, parent, path, &attrib, fh, &fs);
 	if (FSAL_IS_ERROR(status))
 		return status;

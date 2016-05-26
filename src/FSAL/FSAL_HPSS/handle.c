@@ -61,7 +61,6 @@ static struct hpss_fsal_obj_handle *hpss_alloc_handle(
 	if (fh != NULL)
 		memcpy(hdl->handle, fh,  sizeof(struct hpss_file_handle));
 
-	hdl->obj_handle.attrs = &hdl->attributes;
 	hdl->obj_handle.type = attr->type;
 
 	if ((hdl->obj_handle.type == SYMBOLIC_LINK) &&

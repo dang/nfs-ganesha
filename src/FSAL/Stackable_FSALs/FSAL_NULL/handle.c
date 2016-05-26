@@ -70,8 +70,6 @@ static struct nullfs_fsal_obj_handle *nullfs_alloc_handle(
 
 	result = gsh_calloc(1, sizeof(struct nullfs_fsal_obj_handle));
 
-	/* attributes */
-	result->obj_handle.attrs = sub_handle->attrs;
 	/* default handlers */
 	fsal_obj_handle_init(&result->obj_handle, &export->export,
 			     sub_handle->type);

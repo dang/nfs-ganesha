@@ -93,7 +93,6 @@ static struct zfs_fsal_obj_handle *alloc_handle(struct zfs_file_handle *fh,
 	hdl->handle = (struct zfs_file_handle *)&hdl[1];
 	memcpy(hdl->handle, fh, sizeof(struct zfs_file_handle));
 
-	hdl->obj_handle.attrs = &hdl->attributes;
 	hdl->obj_handle.type = posix2fsal_type(stat->st_mode);
 
 	if ((hdl->obj_handle.type == SYMBOLIC_LINK) &&

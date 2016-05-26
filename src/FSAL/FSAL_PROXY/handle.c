@@ -1257,8 +1257,8 @@ static fsal_status_t pxy_create(struct fsal_obj_handle *dir_hdl,
 			     &fhok->object, handle);
 	if (FSAL_IS_ERROR(st))
 		return st;
-	*attrib = *(*handle)->attrs;
-	return st;
+
+	return (*handle)->obj_ops.getattrs(*handle, attrib);
 }
 
 static fsal_status_t pxy_mkdir(struct fsal_obj_handle *dir_hdl,
@@ -1314,9 +1314,10 @@ static fsal_status_t pxy_mkdir(struct fsal_obj_handle *dir_hdl,
 	st = pxy_make_object(op_ctx->fsal_export,
 			     &atok->obj_attributes,
 			     &fhok->object, handle);
-	if (!FSAL_IS_ERROR(st))
-		*attrib = *(*handle)->attrs;
-	return st;
+	if (FSAL_IS_ERROR(st))
+		return st;
+
+	return (*handle)->obj_ops.getattrs(*handle, attrib);
 }
 
 static fsal_status_t pxy_mknod(struct fsal_obj_handle *dir_hdl,
@@ -1399,9 +1400,10 @@ static fsal_status_t pxy_mknod(struct fsal_obj_handle *dir_hdl,
 	st = pxy_make_object(op_ctx->fsal_export,
 			     &atok->obj_attributes,
 			     &fhok->object, handle);
-	if (!FSAL_IS_ERROR(st))
-		*attrib = *(*handle)->attrs;
-	return st;
+	if (FSAL_IS_ERROR(st))
+		return st;
+
+	return (*handle)->obj_ops.getattrs(*handle, attrib);
 }
 
 static fsal_status_t pxy_symlink(struct fsal_obj_handle *dir_hdl,
@@ -1458,9 +1460,10 @@ static fsal_status_t pxy_symlink(struct fsal_obj_handle *dir_hdl,
 	st = pxy_make_object(op_ctx->fsal_export,
 			     &atok->obj_attributes,
 			     &fhok->object, handle);
-	if (!FSAL_IS_ERROR(st))
-		*attrib = *(*handle)->attrs;
-	return st;
+	if (FSAL_IS_ERROR(st))
+		return st;
+
+	return (*handle)->obj_ops.getattrs(*handle, attrib);
 }
 
 static fsal_status_t pxy_readlink(struct fsal_obj_handle *obj_hdl,
@@ -2063,7 +2066,6 @@ static struct pxy_obj_handle *pxy_alloc_handle(struct fsal_export *exp,
 		n->fh4 = *fh;
 		n->fh4.nfs_fh4_val = n->blob.bytes;
 		memcpy(n->blob.bytes, fh->nfs_fh4_val, fh->nfs_fh4_len);
-		n->obj.attrs = &n->attributes;
 		n->attributes = *attr;
 		n->blob.len = fh->nfs_fh4_len + sizeof(n->blob);
 		n->blob.type = attr->type;

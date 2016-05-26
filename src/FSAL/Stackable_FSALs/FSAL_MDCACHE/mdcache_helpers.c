@@ -84,8 +84,6 @@ static mdcache_entry_t *mdcache_alloc_handle(
 	result->sub_handle = sub_handle;
 	result->obj_handle.type = sub_handle->type;
 	result->obj_handle.fs = fs;
-	/* attributes */
-	result->obj_handle.attrs = sub_handle->attrs;
 
 	/* default handlers */
 	fsal_obj_handle_init(&result->obj_handle, &export->export,
@@ -491,8 +489,8 @@ mdcache_new_entry(struct mdcache_fsal_export *export,
 	}
 
 	/* nentry not reachable yet; no need to lock */
-	if (nentry->obj_handle.attrs->expire_time_attr == 0) {
-		nentry->obj_handle.attrs->expire_time_attr =
+	if (nentry->attrs.expire_time_attr == 0) {
+		nentry->attrs.expire_time_attr =
 			op_ctx->export->expire_time_attr;
 	}
 	mdc_fixup_md(nentry);

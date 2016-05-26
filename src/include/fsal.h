@@ -302,10 +302,8 @@ fsal_status_t fsal_access(struct fsal_obj_handle *obj,
 			  fsal_accessflags_t *denied);
 uint64_t fsal_fileid(struct fsal_obj_handle *obj);
 fsal_status_t fsal_refresh_attrs(struct fsal_obj_handle *obj);
-fsal_errors_t fsal_getattr(struct fsal_obj_handle *obj,
-				  void *opaque,
-				  fsal_getattr_cb_t cb,
-				  enum cb_state cb_state);
+fsal_status_t fsal_getattrs(struct fsal_obj_handle *obj,
+			   struct attrlist *outattrs);
 fsal_status_t fsal_link(struct fsal_obj_handle *obj,
 			struct fsal_obj_handle *dest_dir,
 			const char *name);

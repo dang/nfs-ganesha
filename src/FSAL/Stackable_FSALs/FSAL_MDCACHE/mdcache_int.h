@@ -235,6 +235,8 @@ struct mdcache_fsal_obj_handle {
 	struct fsal_obj_handle obj_handle;
 	/** Sub-FSAL handle */
 	struct fsal_obj_handle *sub_handle;
+	/** Cached attributes */
+	struct attrlist attrs;
 	/** FH hash linkage */
 	struct {
 		struct avltree_node node_k;	/*< AVL node in tree */
@@ -475,7 +477,7 @@ static inline void
 mdc_fixup_md(mdcache_entry_t *entry)
 {
 	/* Set the refresh time for the cache entry */
-	if (entry->obj_handle.attrs->expire_time_attr > 0)
+	if (entry->attrs.expire_time_attr > 0)
 		entry->attr_time = time(NULL);
 	else
 		entry->attr_time = 0;
@@ -486,7 +488,7 @@ mdc_fixup_md(mdcache_entry_t *entry)
 	 * Also, fsal attrs has a changetime.
 	 * (Matt). */
 	entry->mde_change_time =
-	    timespec_to_nsecs(&entry->obj_handle.attrs->chgtime);
+	    timespec_to_nsecs(&entry->attrs.chgtime);
 
 	/* We have just loaded the attributes from the FSAL. */
 	atomic_set_uint32_t_bits(&entry->mde_flags, MDCACHE_TRUST_ATTRS);
@@ -506,21 +508,21 @@ mdcache_is_attrs_valid(const mdcache_entry_t *entry)
 	if (!(entry->mde_flags & MDCACHE_TRUST_ATTRS))
 		return false;
 
-	if (FSAL_TEST_MASK(entry->obj_handle.attrs->mask, ATTR_RDATTR_ERR))
+	if (FSAL_TEST_MASK(entry->attrs.mask, ATTR_RDATTR_ERR))
 		return false;
 
 	if (entry->obj_handle.type == DIRECTORY
 	    && mdcache_param.getattr_dir_invalidation)
 		return false;
 
-	if (entry->obj_handle.attrs->expire_time_attr == 0)
+	if (entry->attrs.expire_time_attr == 0)
 		return false;
 
-	if (entry->obj_handle.attrs->expire_time_attr > 0) {
+	if (entry->attrs.expire_time_attr > 0) {
 		time_t current_time = time(NULL);
 
 		if (current_time - entry->attr_time >
-		    entry->obj_handle.attrs->expire_time_attr)
+		    entry->attrs.expire_time_attr)
 			return false;
 	}
 

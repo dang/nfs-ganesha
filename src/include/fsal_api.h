@@ -1435,11 +1435,13 @@ struct fsal_obj_ops {
  * Since the caller can take the attribute lock and read them off the
  * public filehandle, they are not copied out.
  *
- * @param[in]  obj_hdl  Object to query
+ * @param[in]  obj_hdl    Object to query
+ * @param[out] attrib_get Attribute list for file
  *
  * @return FSAL status.
  */
-	 fsal_status_t (*getattrs)(struct fsal_obj_handle *obj_hdl);
+	 fsal_status_t (*getattrs)(struct fsal_obj_handle *obj_hdl,
+				   struct attrlist *attrib_get);
 
 /**
  * @brief Set attributes on an object
@@ -2835,7 +2837,7 @@ struct fsal_obj_handle {
 	 * some other field (for example, the underlying FSAL's attributes
 	 * in the case of FSAL_NULL).
 	 */
-	struct attrlist *attrs;
+	/*struct attrlist *attrs;*/
 
 	object_file_type_t type;	/*< Object file type */
 	struct state_hdl *state_hdl;	/*< State related to this handle */

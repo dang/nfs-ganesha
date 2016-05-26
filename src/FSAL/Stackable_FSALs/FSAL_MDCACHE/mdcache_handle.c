@@ -714,7 +714,8 @@ out:
  * @param[in] obj_hdl	Object to get attributes from
  * @return FSAL status
  */
-static fsal_status_t mdcache_getattrs(struct fsal_obj_handle *obj_hdl)
+static fsal_status_t mdcache_getattrs(struct fsal_obj_handle *obj_hdl,
+				      struct attrlist *outattrs)
 {
 	mdcache_entry_t *entry =
 		container_of(obj_hdl, mdcache_entry_t, obj_handle);
@@ -735,11 +736,11 @@ static fsal_status_t mdcache_getattrs(struct fsal_obj_handle *obj_hdl)
 		/* Someone beat us to it */
 		goto unlock;
 
-	oldmtime = obj_hdl->attrs->mtime.tv_sec;
+	oldmtime = entry->attrs.mtime.tv_sec;
 
 	subcall(
 		status = entry->sub_handle->obj_ops.getattrs(
-			entry->sub_handle)
+			entry->sub_handle, &entry->attrs)
 	       );
 
 	if (FSAL_IS_ERROR(status)) {
@@ -750,7 +751,7 @@ static fsal_status_t mdcache_getattrs(struct fsal_obj_handle *obj_hdl)
 	mdc_fixup_md(entry);
 
 	if ((obj_hdl->type == DIRECTORY) &&
-	    (oldmtime < obj_hdl->attrs->mtime.tv_sec)) {
+	    (oldmtime < entry->attrs.mtime.tv_sec)) {
 
 		PTHREAD_RWLOCK_wrlock(&entry->content_lock);
 		status = mdcache_dirent_invalidate_all(entry);
@@ -765,6 +766,7 @@ static fsal_status_t mdcache_getattrs(struct fsal_obj_handle *obj_hdl)
 	}
 
 unlock:
+	*outattrs = entry->attrs; /* Struct copy */
 	PTHREAD_RWLOCK_unlock(&entry->attr_lock);
 	return status;
 }

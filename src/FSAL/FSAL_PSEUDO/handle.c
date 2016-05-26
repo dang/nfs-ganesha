@@ -197,8 +197,6 @@ static struct pseudo_fsal_obj_handle
 	hdl = gsh_calloc(1, sizeof(struct pseudo_fsal_obj_handle) +
 			    V4_FH_OPAQUE_SIZE);
 
-	hdl->obj_handle.attrs = &hdl->attributes;
-
 	/* Establish tree details for this directory */
 	hdl->name = gsh_strdup(name);
 	hdl->parent = parent;

@@ -83,7 +83,6 @@ static struct pt_fsal_obj_handle *alloc_handle(ptfsal_handle_t *fh,
 
 	hdl->handle = (ptfsal_handle_t *) &hdl[1];
 	memcpy(hdl->handle, fh, sizeof(ptfsal_handle_t));
-	hdl->obj_handle.attrs = &hdl->attributes;
 	hdl->obj_handle.type = attributes->type;
 	hdl->obj_handle.fs = &pt_filesystem;
 	if (hdl->obj_handle.type == REGULAR_FILE) {
@@ -134,7 +133,12 @@ static fsal_status_t pt_lookup(struct fsal_obj_handle *parent,
 			"Parent handle is not a directory. hdl = 0x%p", parent);
 		return fsalstat(ERR_FSAL_NOTDIR, 0);
 	}
-	attrib.mask = parent->attrs->mask;
+
+	/* Get the parent's attrib mask */
+	status = parent->obj_ops.getattrs(parent, &attrib);
+	if (FSAL_IS_ERROR(status))
+		return status;
+
 	status = PTFSAL_lookup(op_ctx, parent, path, &attrib, fh);
 	if (FSAL_IS_ERROR(status))
 		return status;

@@ -855,16 +855,20 @@ fsal_status_t hpss_getextattr_attrs(struct fsal_obj_handle *obj_hdl,
 				    struct attrlist *p_attrs)
 {
 	int rc;
+	fsal_status_t status;
+	struct attrlist attrs;
 
 	/* sanity checks */
 	if (!obj_hdl || !p_attrs)
 		return fsalstat(ERR_FSAL_FAULT, 0);
 
+	status = obj_hdl->obj_ops.getattrs(obj_hdl, &attrs);
+	if (FSAL_IS_ERROR(status))
+		return status;
 
 	/* check that this index match the type of entry */
 	if (xattr_id < XATTR_COUNT &&
-	    !do_match_type(xattr_list[xattr_id].flags,
-			   obj_hdl->attrs->type))
+	    !do_match_type(xattr_list[xattr_id].flags, attrs.type))
 		return fsalstat(ERR_FSAL_INVAL, 0);
 
 	if (xattr_id >= XATTR_COUNT)
@@ -872,8 +876,7 @@ fsal_status_t hpss_getextattr_attrs(struct fsal_obj_handle *obj_hdl,
 			     "Getting attributes for xattr #%u",
 			      xattr_id - XATTR_COUNT);
 
-	rc = file_attributes_to_xattr_attrs(obj_hdl->attrs,
-					    p_attrs, xattr_id);
+	rc = file_attributes_to_xattr_attrs(&attrs, p_attrs, xattr_id);
 	if (rc)
 		return fsalstat(ERR_FSAL_INVAL, rc);
 

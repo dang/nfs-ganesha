@@ -447,7 +447,8 @@ fsal_status_t tank_list_ext_attrs(struct fsal_obj_handle *obj_hdl,
 			xattrs_tab[out_index].attributes.mask =
 			    obj_handle->attributes.mask;
 
-			if (file_attributes_to_xattr_attrs(obj_hdl->attrs,
+			if (file_attributes_to_xattr_attrs(
+						&obj_handle->attributes,
 							   &xattrs_tab
 							   [out_index]
 							   .attributes,

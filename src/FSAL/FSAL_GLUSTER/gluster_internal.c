@@ -155,7 +155,6 @@ void construct_handle(struct glusterfs_export *glexport, const struct stat *sb,
 
 	constructing = gsh_calloc(1, sizeof(struct glusterfs_handle));
 
-	constructing->handle.attrs = &constructing->attributes;
 	constructing->attributes.mask =
 		glexport->export.exp_ops.fs_supported_attrs(&glexport->export);
 

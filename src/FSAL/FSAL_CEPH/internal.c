@@ -155,7 +155,6 @@ void construct_handle(const struct stat *st, struct Inode *i,
 #endif /* CEPH_NOSNAP */
 	constructing->i = i;
 	constructing->up_ops = export->export.up_ops;
-	constructing->handle.attrs = &constructing->attributes;
 
 	ceph2fsal_attributes(st, &constructing->attributes);
 

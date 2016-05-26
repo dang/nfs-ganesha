@@ -100,7 +100,6 @@ static struct lustre_fsal_obj_handle *alloc_handle(
 
 	hdl->handle = (struct lustre_file_handle *)&hdl[1];
 	memcpy(hdl->handle, fh, sizeof(struct lustre_file_handle));
-	hdl->obj_handle.attrs = &hdl->attributes;
 	hdl->obj_handle.type = posix2fsal_type(stat->st_mode);
 	hdl->dev = posix2fsal_devt(stat->st_dev);
 	hdl->obj_handle.fs = fs;
