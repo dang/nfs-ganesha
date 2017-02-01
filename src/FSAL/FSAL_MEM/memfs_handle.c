@@ -56,7 +56,7 @@ memfs_n_cmpf(const struct avltree_node *lhs,
 	lk = avltree_container_of(lhs, struct mem_fsal_obj_handle, avl_n);
 	rk = avltree_container_of(rhs, struct mem_fsal_obj_handle, avl_n);
 
-	return strcmp(lk->name, rk->name);
+	return strcmp(lk->m_name, rk->m_name);
 }
 
 static inline int
@@ -75,26 +75,6 @@ memfs_i_cmpf(const struct avltree_node *lhs,
 		return 0;
 
 	return 1;
-}
-
-static inline struct avltree_node *
-avltree_inline_name_lookup(
-	const struct avltree_node *key,
-	const struct avltree *tree)
-{
-	struct avltree_node *node = tree->root;
-	int res = 0;
-
-	while (node) {
-		res = memfs_n_cmpf(node, key);
-		if (res == 0)
-			return node;
-		if (res > 0)
-			node = node->left;
-		else
-			node = node->right;
-	}
-	return NULL;
 }
 
 /**
@@ -174,7 +154,7 @@ static int fullpath(struct display_buffer *pathbuf,
 	 * Note that a mem FS root's name is it's full path.
 	 */
 	if (b_left > 0)
-		b_left = display_cat(pathbuf, this_node->name);
+		b_left = display_cat(pathbuf, this_node->m_name);
 
 	return b_left;
 }
@@ -254,14 +234,16 @@ static struct mem_fsal_obj_handle
 			    V4_FH_OPAQUE_SIZE);
 
 	/* Establish tree details for this directory */
-	hdl->name = gsh_strdup(name);
+	hdl->m_name = gsh_strdup(name);
 	hdl->parent = parent;
 
-	if (hdl->name == NULL) {
+	if (hdl->m_name == NULL) {
 		LogDebug(COMPONENT_FSAL,
 			 "Could not name");
 		goto spcerr;
 	}
+	LogEvent(COMPONENT_FSAL, "New obj %p name %p - %s", hdl, hdl->m_name,
+		 hdl->m_name);
 
 	/* Create the handle */
 	hdl->handle = (char *) &hdl[1];
@@ -356,8 +338,10 @@ static struct mem_fsal_obj_handle
 
  spcerr:
 
-	if (hdl->name != NULL)
-		gsh_free(hdl->name);
+	if (hdl->m_name != NULL) {
+		gsh_free(hdl->m_name);
+		hdl->m_name = NULL;
+	}
 
 	gsh_free(hdl);		/* elvis has left the building */
 	return NULL;
@@ -395,7 +379,7 @@ static fsal_status_t mem_create_obj(struct mem_fsal_obj_handle *parent,
 
 	LogFullDebug(COMPONENT_FSAL,
 		     "%s numlinks %"PRIu32,
-		     parent->name, numlinks);
+		     parent->m_name, numlinks);
 
 	*new_obj = &hdl->obj_handle;
 
@@ -427,17 +411,17 @@ static fsal_status_t mem_int_lookup(struct mem_fsal_obj_handle *dir,
 		*entry = dir->parent;
 		LogFullDebug(COMPONENT_FSAL,
 			     "Found %s/%s hdl=%p",
-			     dir->name, path, hdl);
+			     dir->m_name, path, hdl);
 		return fsalstat(ERR_FSAL_NO_ERROR, 0);
 	}
 
-	key->name = (char *) path;
-	node = avltree_inline_name_lookup(&key->avl_n, &dir->mh_dir.avl_name);
+	key->m_name = (char *)path;
+	node = avltree_lookup(&key->avl_n, &dir->mh_dir.avl_name);
 	if (!node) {
 		return fsalstat(ERR_FSAL_NOENT, 0);
 	}
 	*entry = avltree_container_of(node, struct mem_fsal_obj_handle, avl_n);
-	LogFullDebug(COMPONENT_FSAL, "Found %s/%s hdl=%p", dir->name, path,
+	LogFullDebug(COMPONENT_FSAL, "Found %s/%s hdl=%p", dir->m_name, path,
 		     hdl);
 
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
@@ -472,7 +456,7 @@ static fsal_status_t mem_lookup(struct fsal_obj_handle *parent,
 	else
 		LogFullDebug(COMPONENT_FSAL,
 			     "Skipping lock for %s",
-			     myself->name);
+			     myself->m_name);
 
 	status = mem_int_lookup(myself, path, &hdl);
 	if (FSAL_IS_ERROR(status)) {
@@ -552,9 +536,9 @@ static fsal_status_t mem_readdir(struct fsal_obj_handle *dir_hdl,
 
 	*eof = true;
 
-	LogDebug(COMPONENT_FSAL,
+	LogEvent(COMPONENT_FSAL,
 		 "hdl=%p, name=%s",
-		 myself, myself->name);
+		 myself, myself->m_name);
 
 	PTHREAD_RWLOCK_rdlock(&dir_hdl->obj_lock);
 
@@ -576,7 +560,7 @@ static fsal_status_t mem_readdir(struct fsal_obj_handle *dir_hdl,
 		fsal_prepare_attrs(&attrs, attrmask);
 		fsal_copy_attrs(&attrs, &hdl->attrs, false);
 
-		cb_rc = cb(hdl->name, &hdl->obj_handle, &attrs,
+		cb_rc = cb(hdl->m_name, &hdl->obj_handle, &attrs,
 			   dir_state, hdl->index);
 
 		fsal_release_attrs(&attrs);
@@ -772,11 +756,9 @@ static fsal_status_t mem_getattrs(struct fsal_obj_handle *obj_hdl,
 		/* Removed entry - stale */
 		LogDebug(COMPONENT_FSAL,
 			 "Requesting attributes for removed entry %p, name=%s",
-			 myself, myself->name);
+			 myself, myself->m_name);
 		return fsalstat(ERR_FSAL_STALE, ESTALE);
 	}
-
-	fsal_copy_attrs(outattrs, &myself->attrs, false);
 
 	/* We need to update the numlinks */
 	myself->attrs.numlinks =
@@ -785,8 +767,10 @@ static fsal_status_t mem_getattrs(struct fsal_obj_handle *obj_hdl,
 	LogFullDebug(COMPONENT_FSAL,
 		     "hdl=%p, name=%s numlinks %"PRIu32,
 		     myself,
-		     myself->name,
+		     myself->m_name,
 		     myself->attrs.numlinks);
+
+	fsal_copy_attrs(outattrs, &myself->attrs, false);
 
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
@@ -901,7 +885,7 @@ static fsal_status_t mem_unlink(struct fsal_obj_handle *dir_hdl,
 		if (numlinks != 2) {
 			LogFullDebug(COMPONENT_FSAL,
 				     "%s numlinks %"PRIu32,
-				     myself->name, numlinks);
+				     myself->m_name, numlinks);
 			status = fsalstat(ERR_FSAL_NOTEMPTY, 0);
 			goto unlock;
 		}
@@ -929,7 +913,7 @@ static fsal_status_t mem_unlink(struct fsal_obj_handle *dir_hdl,
 
 	/* We need to update the numlinks. */
 	numlinks = atomic_dec_uint32_t(&parent->mh_dir.numlinks);
-	LogFullDebug(COMPONENT_FSAL, "%s numlinks %"PRIu32, parent->name,
+	LogFullDebug(COMPONENT_FSAL, "%s numlinks %"PRIu32, parent->m_name,
 		     numlinks);
 
 	/* Remove from directory's name and index avls */
@@ -992,8 +976,8 @@ static fsal_status_t mem_rename(struct fsal_obj_handle *obj_hdl,
 	}
 
 	/* Change name */
-	gsh_free(mem_obj->name);
-	mem_obj->name = gsh_strdup(new_name);
+	gsh_free(mem_obj->m_name);
+	mem_obj->m_name = gsh_strdup(new_name);
 
 	/* Insert into new directory */
 	mem_insert_obj(mem_newdir, mem_obj);
@@ -1290,6 +1274,7 @@ fsal_status_t mem_read2(struct fsal_obj_handle *obj_hdl,
 	}
 
 	memset(buffer, 0, buffer_size);
+	memset(buffer, '0', buffer_size - 1);
 	*read_amount = buffer_size;
 	*end_of_file = (buffer_size == 0);
 
@@ -1353,7 +1338,8 @@ fsal_status_t mem_write2(struct fsal_obj_handle *obj_hdl,
 	}
 
 	if (offset + buffer_size > myself->mh_file.length) {
-		myself->mh_file.length = offset + buffer_size;
+		myself->attrs.filesize = myself->mh_file.length = offset +
+			buffer_size;
 	}
 
 	*wrote_amount = buffer_size;
@@ -1540,18 +1526,20 @@ static void mem_release(struct fsal_obj_handle *obj_hdl)
 		/* Entry is still live */
 		LogDebug(COMPONENT_FSAL,
 			 "Releasing live hdl=%p, name=%s, don't deconstruct it",
-			 myself, myself->name);
+			 myself, myself->m_name);
 		return;
 	}
 
 	fsal_obj_handle_fini(obj_hdl);
 
-	LogDebug(COMPONENT_FSAL,
+	LogEvent(COMPONENT_FSAL,
 		 "Releasing obj_hdl=%p, myself=%p, name=%s",
-		 obj_hdl, myself, myself->name);
+		 obj_hdl, myself, myself->m_name);
 
-	if (myself->name != NULL)
-		gsh_free(myself->name);
+	if (myself->m_name != NULL) {
+		gsh_free(myself->m_name);
+		myself->m_name = NULL;
+	}
 
 	gsh_free(myself);
 }
@@ -1610,8 +1598,8 @@ fsal_status_t memfs_lookup_path(struct fsal_export *exp_hdl,
 	attrs.valid_mask = ATTR_MODE;
 	attrs.mode = 0755;
 
-	if (myself->root_handle == NULL) {
-		myself->root_handle =
+	if (myself->m_root_handle == NULL) {
+		myself->m_root_handle =
 			mem_alloc_handle(NULL,
 					 myself->export_path,
 					 DIRECTORY,
@@ -1619,10 +1607,11 @@ fsal_status_t memfs_lookup_path(struct fsal_export *exp_hdl,
 					 &attrs);
 	}
 
-	*obj_hdl = &myself->root_handle->obj_handle;
+	*obj_hdl = &myself->m_root_handle->obj_handle;
 
 	if (attrs_out != NULL)
-		fsal_copy_attrs(attrs_out, &myself->root_handle->attrs, false);
+		fsal_copy_attrs(attrs_out, &myself->m_root_handle->attrs,
+				false);
 
 	return fsalstat(ERR_FSAL_NO_ERROR, 0);
 }
@@ -1673,7 +1662,7 @@ fsal_status_t memfs_create_handle(struct fsal_export *exp_hdl,
 			   V4_FH_OPAQUE_SIZE) == 0) {
 			LogDebug(COMPONENT_FSAL,
 				 "Found hdl=%p name=%s",
-				 my_hdl, my_hdl->name);
+				 my_hdl, my_hdl->m_name);
 
 			*obj_hdl = hdl;
 

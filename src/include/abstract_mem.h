@@ -77,6 +77,7 @@ gsh_malloc__(size_t n,
 {
 	void *p = malloc(n);
 
+	fprintf(stderr, "%s %d: malloc %p %zu\n", function, line, p, n);
 	if (p == NULL) {
 		LogMallocFailure(file, line, function, "gsh_malloc");
 		abort();
@@ -207,6 +208,7 @@ gsh_strdup__(const char *s, const char *file, int line, const char *function)
 {
 	char *p = strdup(s);
 
+	fprintf(stderr, "%s %d: strdup %p\n", function, line, p);
 	if (p == NULL) {
 		LogMallocFailure(file, line, function, "gsh_strdup");
 		abort();
@@ -266,10 +268,12 @@ gsh_strldup__(const char *s, size_t length, size_t *copied,
  * @param[in] p Block of memory to free.
  */
 static inline void
-gsh_free(void *p)
+gsh_free__(void *p, const char *file, int line, const char *function)
 {
+	fprintf(stderr, "%s %d: free %p\n", function, line, p);
 	free(p);
 }
+#define gsh_free(p) gsh_free__(p, __FILE__, __LINE__, __func__)
 
 /**
  * @brief Free a block of memory with size

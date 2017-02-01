@@ -40,7 +40,7 @@ struct mem_fsal_obj_handle;
 struct memfs_fsal_export {
 	struct fsal_export export;
 	char *export_path;
-	struct mem_fsal_obj_handle *root_handle;
+	struct mem_fsal_obj_handle *m_root_handle;
 };
 
 fsal_status_t memfs_lookup_path(struct fsal_export *exp_hdl,
@@ -92,7 +92,7 @@ struct mem_fsal_obj_handle {
 	struct avltree_node avl_i;
 	uint32_t index; /* index in parent */
 	uint32_t next_i; /* next child index */
-	char *name;
+	char *m_name;
 	bool inavl;
 };
 

@@ -68,18 +68,18 @@ static void memfs_release(struct fsal_export *exp_hdl)
 
 	myself = container_of(exp_hdl, struct memfs_fsal_export, export);
 
-	if (myself->root_handle != NULL) {
-		fsal_obj_handle_fini(&myself->root_handle->obj_handle);
+	if (myself->m_root_handle != NULL) {
+		fsal_obj_handle_fini(&myself->m_root_handle->obj_handle);
 
-		LogDebug(COMPONENT_FSAL,
-			 "Releasing hdl=%p, name=%s",
-			 myself->root_handle, myself->root_handle->name);
+		LogEvent(COMPONENT_FSAL, "Releasing hdl=%p, name=%p - %s",
+			 myself->m_root_handle, myself->m_root_handle->m_name,
+			 myself->m_root_handle->m_name);
 
-		if (myself->root_handle->name != NULL)
-			gsh_free(myself->root_handle->name);
+		if (myself->m_root_handle->m_name != NULL)
+			gsh_free(myself->m_root_handle->m_name);
 
-		gsh_free(myself->root_handle);
-		myself->root_handle = NULL;
+		gsh_free(myself->m_root_handle);
+		myself->m_root_handle = NULL;
 	}
 
 	fsal_detach_export(exp_hdl->fsal, &exp_hdl->exports);
@@ -302,7 +302,7 @@ fsal_status_t memfs_create_export(struct fsal_module *fsal_hdl,
 		LogMajor(COMPONENT_FSAL,
 			 "Could not attach export");
 		gsh_free(myself->export_path);
-		gsh_free(myself->root_handle);
+		gsh_free(myself->m_root_handle);
 		free_export_ops(&myself->export);
 		gsh_free(myself);	/* elvis has left the building */
 
