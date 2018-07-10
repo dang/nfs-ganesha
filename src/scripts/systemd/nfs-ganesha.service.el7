@@ -29,7 +29,9 @@ ExecStartPost=-/bin/bash -c "prlimit --pid $MAINPID --nofile=$NOFILE:$NOFILE"
 ExecStartPost=-/bin/bash -c "/usr/bin/sleep 2 && /bin/dbus-send --system   --dest=org.ganesha.nfsd --type=method_call /org/ganesha/nfsd/admin  org.ganesha.nfsd.admin.init_fds_limit"
 ExecReload=/bin/dbus-send --system   --dest=org.ganesha.nfsd --type=method_call /org/ganesha/nfsd/admin  org.ganesha.nfsd.admin.reload
 ExecStop=/bin/dbus-send --system   --dest=org.ganesha.nfsd --type=method_call /org/ganesha/nfsd/admin org.ganesha.nfsd.admin.shutdown
-
+Restart=on-failure
+RestartSec=3
+RestartPreventExitStatus=SIGABRT SIGKILL SIGSEGV
 [Install]
 WantedBy=multi-user.target
 Also=nfs-ganesha-lock.service
