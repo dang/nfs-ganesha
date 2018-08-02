@@ -8,13 +8,13 @@ ganesha-gluster-config -- NFS Ganesha Gluster Configuration File
 SYNOPSIS
 ==========================================================
 
-| /etc/ganesha/gluster.conf
+| /etc/ganesha/ganesha.conf
 
 DESCRIPTION
 ==========================================================
 
-NFS-Ganesha install the following config file for Gluster FSAL:
-| /etc/ganesha/gluster.conf
+NFS-Ganesha installs the following config file for Gluster FSAL:
+| /etc/ganesha/ganesha.conf
 
 This file lists Gluster specific config options.
 
@@ -29,7 +29,7 @@ Name(string, "GLUSTER")
 
 **volpath(path, default "/")**
 
-**glfs_log(path, default "/tmp/gfapi.log")**
+**glfs_log(path, default "/var/log/ganesha/gfapi.log")**
 
 **up_poll_usec(uint64, range 1 to 60*1000*1000, default 10)**
 
