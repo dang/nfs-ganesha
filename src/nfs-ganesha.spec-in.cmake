@@ -156,7 +156,7 @@ BuildRequires:	gcc-c++
 %if %{with system_ntirpc}
 BuildRequires: libntirpc-devel >= @NTIRPC_MIN_VERSION@
 %else
-Requires: libntirpc = @NTIRPC_VERSION_EMBED@
+Requires: libntirpc = @NTIRPC_VERSION_BASE_EMBED@
 %endif
 %if %{with sanitize_address}
 BuildRequires:	libasan
@@ -469,11 +469,14 @@ fi
 
 # NTIRPC (if built-in)
 %if ! %{with system_ntirpc}
+%global ntirpc_dev_version %{lua: s = string.gsub('@NTIRPC_VERSION_EXTRA_EMBED@', '^%-', ''); s2 = string.gsub(s, '%-', '.'); print((s2 ~= nil and s2 ~= '') and s2 or "0.1") }
+
 %package -n libntirpc
 Summary:	New Transport Independent RPC Library
 Group:		System Environment/Libraries
 License:	BSD
-Version:	@NTIRPC_VERSION_EMBED@
+Version:	@NTIRPC_VERSION_BASE_EMBED@
+Release:	%{ntirpc_dev_version}%{?dist}
 Url:		https://github.com/nfs-ganesha/ntirpc
 
 # libtirpc has /etc/netconfig, most machines probably have it anyway
@@ -495,10 +498,10 @@ the following features not found in libtirpc:
 
 %package -n libntirpc-devel
 Summary:	Development headers for libntirpc
-Requires:	libntirpc = @NTIRPC_VERSION_EMBED@
+Requires:	libntirpc = @NTIRPC_VERSION_BASE_EMBED@
 Group:		System Environment/Libraries
 License:	BSD
-Version:	@NTIRPC_VERSION_EMBED@
+Version:	@NTIRPC_VERSION_BASE_EMBED@
 Url:		https://github.com/nfs-ganesha/ntirpc
 
 %description -n libntirpc-devel
